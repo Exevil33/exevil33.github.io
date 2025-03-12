@@ -5,13 +5,8 @@
     font-family: 'Montserrat', sans-serif;
   }
 
-  .container {
-    max-width: 800px;
-    margin: 40px auto;
-    padding: 20px;
-    background-color: #3b4144;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  .margin-top{
+    margin-top: 100px;
   }
 
   .header {
