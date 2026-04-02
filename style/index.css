@@ -206,7 +206,6 @@ body {
   bottom: -4px;
   width: 100%;
   height: 2px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
   box-shadow: var(--neon-glow);
   border-radius: 1px;
 }
@@ -329,7 +328,7 @@ h1 {
 }
 
 .thumb {
-  height: auto;
+  height: 300px;
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(255, 255, 255, 0.02));
   border-radius: 8px;
   margin-bottom: 12px;
@@ -342,11 +341,21 @@ h1 {
 
 .project-title {
   font-weight: 700;
+  color: #04DDFA;
 }
 
 .project-meta {
   color: var(--muted);
   font-size: 13px;
+}
+
+.project-description{
+  font-size: 13px;
+
+}
+.project-links{
+  color: var(--muted);
+  text-decoration: none;
 }
 
 
