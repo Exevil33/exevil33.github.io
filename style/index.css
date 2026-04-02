@@ -134,12 +134,10 @@ body {
 /* ---------- NAVBAR ---------- */
 .navbar {
   position: fixed;
-  top: 18px;
-  left: 0;
-  right: 0;
+  top: 0px;
+  left: 12px;
+  right: 12px;
   z-index: 1000;
-  background: transparent;
-  padding: 0 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -179,10 +177,11 @@ body {
 }
 
 .navbar .nav-link {
-  color: var(--muted);
+  color: #ED3B9C;
   font-weight: 600;
   font-size: 14px;
   transition: color 0.3s ease;
+  
 }
 
 .navbar .nav-link:hover {
@@ -209,7 +208,30 @@ body {
   box-shadow: var(--neon-glow);
   border-radius: 1px;
 }
+.bg-body-tertiary{
+  background-color: #06060a!important;
+}
 
+/* Freccetta per i link del menu su mobile */
+@media (max-width: 991px) {
+  .navbar .nav-link::before {
+    content: "› "; 
+    color: var(--accent); 
+    font-weight: 700;
+    font-size: 1.2em; 
+    line-height: 1;
+    margin-right: 8px; 
+    margin-bottom: 5px;
+    display: inline-block;
+    vertical-align: middle;
+    transition: transform 0.3s ease;
+  }
+
+  /* fa scivolare la freccia a destra quando si fa hover sul link */
+  .navbar .nav-link:hover::before {
+    transform: translateX(4px);
+  }
+}
 /* ---------- HERO ---------- */
 .hero {
   min-height: 100vh;
