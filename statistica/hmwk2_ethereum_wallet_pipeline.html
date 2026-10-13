@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HMWK 2: spiegazione didattica della pipeline crittografica di un wallet Ethereum, da BIP-39 a EIP-55.">
+  <title>HMWK 2 — From Wallet Seed to Ethereum Address</title>
+  <style>
+    :root {
+      --bg: #0a1020;
+      --panel: #111a2e;
+      --panel-2: #16223a;
+      --line: #2b3956;
+      --text: #edf2ff;
+      --muted: #afbdd8;
+      --subtle: #8192b4;
+      --cyan: #6de4e4;
+      --violet: #b8a2ff;
+      --gold: #ffd58a;
+      --green: #9af0c5;
+      --red: #ff9ea8;
+      --radius: 18px;
+      --shadow: 0 18px 50px rgba(0,0,0,.24);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: radial-gradient(900px 450px at 80% -8%, rgba(113,101,255,.18), transparent 60%),
+      radial-gradient(700px 440px at -12% 18%, rgba(75,220,218,.10), transparent 56%), var(--bg);
+      color: var(--text); font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--cyan); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { color: white; }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { color: #e7e0ff; background: #202b45; padding: .14rem .36rem; border-radius: 6px; overflow-wrap: anywhere; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .hero { padding: 62px 0 34px; }
+    .eyebrow { color: var(--cyan); text-transform: uppercase; letter-spacing: .16em; font-weight: 750; font-size: .78rem; }
+    h1 { font-size: clamp(2.35rem, 5vw, 4.4rem); line-height: 1.06; letter-spacing: -.045em; max-width: 980px; margin: 14px 0 18px; }
+    h1 .gradient { background: linear-gradient(95deg, var(--cyan), var(--violet) 68%, var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { max-width: 800px; color: var(--muted); font-size: 1.12rem; margin: 0; }
+    .meta { display:flex; flex-wrap:wrap; gap:9px; margin-top:24px; }
+    .pill { display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border:1px solid var(--line); border-radius:999px; color:var(--muted); background:rgba(17,26,46,.7); font-size:.8rem; }
+    .pill::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--cyan); }
+    main { padding-bottom: 70px; }
+    section { margin: 30px 0; }
+    .section-head { display:flex; gap:20px; align-items:end; justify-content:space-between; margin-bottom:16px; }
+    h2 { margin:0; font-size:clamp(1.55rem, 3vw, 2.15rem); letter-spacing:-.03em; line-height:1.2; }
+    h3 { margin:0 0 8px; font-size:1.12rem; }
+    p { margin: 0 0 12px; }
+    .muted { color:var(--muted); }
+    .small { color:var(--subtle); font-size:.88rem; }
+    .card { background:linear-gradient(145deg, rgba(22,34,58,.94), rgba(15,24,42,.96)); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
+    .pipeline { padding:22px; }
+    .pipe-grid { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:12px; align-items:stretch; }
+    .stage { position:relative; appearance:none; cursor:pointer; text-align:left; width:100%; min-height:140px; color:var(--text); border:1px solid var(--line); border-radius:14px; background:#10192d; padding:15px 13px; transition:transform .18s ease, border-color .18s ease, background .18s ease; }
+    .stage:hover { transform:translateY(-3px); border-color:#63749a; }
+    .stage[aria-pressed="true"] { background:linear-gradient(150deg, rgba(109,228,228,.12), rgba(184,162,255,.13)); border-color:var(--cyan); box-shadow:0 0 0 1px rgba(109,228,228,.12) inset; }
+    .stage:not(:last-child)::after { content:"→"; color:var(--subtle); position:absolute; right:-13px; top:50%; transform:translate(50%,-50%); z-index:2; font-size:1.2rem; }
+    .stage-no { display:block; color:var(--cyan); font-size:.72rem; letter-spacing:.1em; font-weight:800; margin-bottom:9px; }
+    .stage strong { display:block; line-height:1.3; font-size:.98rem; margin-bottom:7px; }
+    .stage span:last-child { display:block; color:var(--muted); font-size:.79rem; line-height:1.45; }
+    .detail { margin-top:16px; display:grid; grid-template-columns:1.3fr .7fr; gap:18px; padding:22px; }
+    .detail h3 { font-size:1.25rem; }
+    .detail .detail-tag { display:inline-block; font-size:.75rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--violet); margin-bottom:8px; }
+    .factbox { border-left:2px solid var(--cyan); padding:5px 0 5px 16px; color:var(--muted); }
+    .factbox strong { color:var(--text); }
+    .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+    .info { padding:22px; }
+    .num { font-size:.78rem; color:var(--cyan); font-weight:800; letter-spacing:.12em; }
+    .info p:last-child { margin-bottom:0; }
+    .label { display:inline-block; border-radius:7px; padding:3px 8px; background:rgba(184,162,255,.1); color:var(--violet); font-size:.76rem; font-weight:700; margin-bottom:10px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; min-width:720px; }
+    th,td { text-align:left; padding:14px 15px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--cyan); font-size:.77rem; letter-spacing:.09em; text-transform:uppercase; font-weight:800; background:rgba(10,16,32,.35); }
+    td { color:var(--muted); }
+    td:first-child { color:var(--text); font-weight:700; white-space:nowrap; }
+    tr:last-child td { border-bottom:0; }
+    .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:13px; }
+    .stat { padding:19px; }
+    .stat .value { font-size:clamp(1.55rem,3vw,2.15rem); font-weight:800; letter-spacing:-.04em; color:var(--cyan); line-height:1.2; margin:8px 0; }
+    .stat p { color:var(--muted); font-size:.88rem; margin:0; }
+    .callout { padding:18px 20px; border-radius:13px; background:rgba(255,213,138,.08); border:1px solid rgba(255,213,138,.3); margin-top:15px; color:var(--muted); }
+    .callout strong { color:var(--gold); }
+    .timeline { position:relative; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:12px; }
+    .event { position:relative; padding:17px 14px; min-height:170px; }
+    .event .year { font-size:1.18rem; font-weight:850; color:var(--violet); margin-bottom:8px; }
+    .event p { font-size:.86rem; color:var(--muted); line-height:1.5; }
+    .event em { color:var(--text); font-style:normal; font-weight:700; }
+    .compare { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .compare .info:first-child { border-top:2px solid var(--violet); }
+    .compare .info:last-child { border-top:2px solid var(--cyan); }
+    .formula { display:block; margin:12px 0; padding:12px 13px; background:#0a1223; border:1px solid var(--line); border-radius:10px; overflow-wrap:anywhere; color:#dce7ff; }
+    .path-parts { display:flex; flex-wrap:wrap; gap:8px; margin:15px 0 10px; }
+    .path-part { appearance:none; cursor:pointer; border:1px solid var(--line); border-radius:10px; color:var(--text); background:#0a1223; padding:9px 12px; font:inherit; font-family:ui-monospace,monospace; }
+    .path-part[aria-pressed="true"] { color:var(--cyan); border-color:var(--cyan); background:rgba(109,228,228,.08); }
+    .path-explain { min-height:72px; border:1px dashed #425272; color:var(--muted); padding:13px 15px; border-radius:11px; }
+    .checklist { list-style:none; padding:0; margin:12px 0 0; }
+    .checklist li { padding:10px 0 10px 28px; position:relative; border-bottom:1px solid rgba(43,57,86,.55); color:var(--muted); }
+    .checklist li:last-child { border-bottom:0; }
+    .checklist li::before { content:"✓"; position:absolute; left:0; color:var(--green); font-weight:900; }
+    .warning { background:rgba(255,158,168,.07); border:1px solid rgba(255,158,168,.25); border-radius:14px; padding:18px 20px; }
+    .warning h3 { color:var(--red); }
+    .sources { padding:22px; }
+    .sources ol { padding-left:20px; margin:8px 0 0; }
+    .sources li { margin:8px 0; color:var(--muted); }
+    footer { border-top:1px solid var(--line); padding:25px 0 35px; color:var(--subtle); font-size:.82rem; }
+    .top-link { color:var(--subtle); text-decoration:none; white-space:nowrap; font-size:.87rem; }
+    .top-link:hover { color:var(--cyan); }
+    @media (max-width: 1000px) {
+      .pipe-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .stage:nth-child(3)::after { display:none; }
+      .timeline { grid-template-columns:repeat(4,minmax(0,1fr)); }
+      .stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media (max-width: 700px) {
+      .wrap { padding:0 16px; }
+      .hero { padding-top:40px; }
+      .section-head { align-items:start; flex-direction:column; gap:8px; }
+      .pipe-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .stage:nth-child(3)::after { display:block; }
+      .stage:nth-child(even)::after { display:none; }
+      .detail, .grid-2, .grid-3, .compare { grid-template-columns:1fr; }
+      .timeline { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .event { min-height:unset; }
+    }
+    @media (max-width: 420px) {
+      .pipe-grid { grid-template-columns:1fr; }
+      .stage::after { display:none !important; }
+      .stats { grid-template-columns:1fr 1fr; }
+      .stat { padding:14px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition:none !important; } }
+  </style>
+</head>
+<body>
+  <header class="hero" id="top">
+    <div class="wrap">
+      <div class="eyebrow">Cybersecurity · Homework 02</div>
+      <h1>From Wallet Seed <span class="gradient">to Ethereum Address</span></h1>
+      <p class="lede">Anatomia della pipeline crittografica di un wallet Ethereum: gestione delle chiavi, crittografia a curve ellittiche, hashing e checksum. Il filo conduttore è capire che ogni primitiva svolge un compito diverso.</p>
+      <div class="meta">
+        <span class="pill">BIP-39 · Mnemonic e seed</span>
+        <span class="pill">BIP-32 / BIP-44 · Derivazione HD</span>
+        <span class="pill">secp256k1 · Chiavi e firme</span>
+        <span class="pill">Keccak-256 · Hash</span>
+        <span class="pill">EIP-55 · Checksum</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="pipeline">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">01 / Pipeline</div>
+          <h2>Dal mnemonic all’indirizzo</h2>
+        </div>
+        <a class="top-link" href="#glossario">Vai ai concetti →</a>
+      </div>
+      <div class="card pipeline">
+        <p class="muted">Seleziona uno stadio per vedere input, output e funzione. Il diagramma è concettuale: non richiede né accetta seed phrase reali.</p>
+        <div class="pipe-grid" role="group" aria-label="Stadi della pipeline Ethereum">
+          <button class="stage" data-stage="0" aria-pressed="true"><span class="stage-no">STEP 01</span><strong>Mnemonic</strong><span>Parole leggibili generate a partire da entropia</span></button>
+          <button class="stage" data-stage="1" aria-pressed="false"><span class="stage-no">STEP 02</span><strong>BIP-39 → Seed</strong><span>Frase trasformata in 512 bit</span></button>
+          <button class="stage" data-stage="2" aria-pressed="false"><span class="stage-no">STEP 03</span><strong>BIP-32 / BIP-44</strong><span>Albero deterministico e percorso standard</span></button>
+          <button class="stage" data-stage="3" aria-pressed="false"><span class="stage-no">STEP 04</span><strong>secp256k1</strong><span>Chiave privata → chiave pubblica</span></button>
+          <button class="stage" data-stage="4" aria-pressed="false"><span class="stage-no">STEP 05</span><strong>Keccak-256</strong><span>Hash della chiave pubblica</span></button>
+          <button class="stage" data-stage="5" aria-pressed="false"><span class="stage-no">STEP 06</span><strong>EIP-55</strong><span>Indirizzo esadecimale con maiuscole di controllo</span></button>
+        </div>
+      </div>
+      <div class="card detail" aria-live="polite">
+        <div>
+          <span class="detail-tag" id="detail-tag">STEP 01 · Input</span>
+          <h3 id="detail-title">Entropia → mnemonic</h3>
+          <p class="muted" id="detail-body">Un generatore crittograficamente sicuro (CSPRNG) produce bit casuali. BIP-39 aggiunge un checksum derivato da SHA-256 e divide la sequenza in gruppi da 11 bit, ciascuno associato a una parola della wordlist.</p>
+        </div>
+        <div class="factbox" id="detail-fact"><strong>Idea chiave</strong><br>La mnemonic è una rappresentazione leggibile dell’entropia, non una password scelta liberamente dall’utente e non una cifratura del wallet.</div>
+      </div>
+    </section>
+
+    <section id="standards">
+      <div class="section-head">
+        <div><div class="eyebrow">02 / Ruoli distinti</div><h2>Che cosa fa ogni standard?</h2></div>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Elemento</th><th>Categoria</th><th>Ruolo principale</th><th>Output / risultato</th></tr></thead>
+          <tbody>
+            <tr><td>BIP-39</td><td>Mnemonic e key stretching</td><td>Codifica entropia in parole e converte la frase in seed con PBKDF2-HMAC-SHA512.</td><td>Seed binario di 512 bit (64 byte).</td></tr>
+            <tr><td>BIP-32</td><td>Derivazione HD</td><td>Deriva in modo deterministico una gerarchia di chiavi figlie usando il seed, indici e chain code.</td><td>Chiavi private/pubbliche figlie e chain code.</td></tr>
+            <tr><td>BIP-44</td><td>Convenzione di percorso</td><td>Organizza gerarchicamente purpose, coin, account, ramo e indice dell’indirizzo.</td><td>Un percorso riproducibile, per esempio <code>m/44'/60'/0'/0/0</code>.</td></tr>
+            <tr><td>secp256k1</td><td>Crittografia a chiave pubblica</td><td>Definisce la curva ellittica impiegata per collegare la chiave privata alla pubblica e per le firme ECDSA.</td><td>Da scalare privata <code>d</code> a punto pubblico <code>Q = dG</code>.</td></tr>
+            <tr><td>Keccak-256</td><td>Hash crittografico</td><td>Calcola il digest della chiave pubblica serializzata secondo la convenzione Ethereum.</td><td>Digest di 256 bit; gli ultimi 160 bit formano l’indirizzo.</td></tr>
+            <tr><td>EIP-55</td><td>Checksum / codifica testuale</td><td>Usa il pattern maiuscole/minuscole delle cifre esadecimali per rilevare molti errori di trascrizione.</td><td>Indirizzo con prefisso <code>0x</code> e casing verificabile.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="generation-derivation">
+      <div class="section-head"><div><div class="eyebrow">03 / Concetto essenziale</div><h2>Generazione ≠ derivazione</h2></div></div>
+      <div class="grid-2">
+        <article class="card info">
+          <span class="label">Key generation</span>
+          <h3>Creare il materiale iniziale</h3>
+          <p class="muted">Il wallet parte da entropia ottenuta da una fonte casuale crittograficamente sicura. Una buona generazione iniziale rende impraticabile indovinare la mnemonic o il segreto corrispondente.</p>
+          <p><strong>Domanda a cui risponde:</strong> «Da quale segreto iniziale parte il wallet?»</p>
+        </article>
+        <article class="card info">
+          <span class="label">Key derivation</span>
+          <h3>Ottenere chiavi in modo riproducibile</h3>
+          <p class="muted">Una volta disponibile il seed, BIP-32 e un percorso come BIP-44 producono le stesse chiavi figlie per gli stessi input. Non serve memorizzare separatamente ogni chiave.</p>
+          <p><strong>Domanda a cui risponde:</strong> «Quale chiave corrisponde a questo account e indice?»</p>
+        </article>
+      </div>
+      <div class="callout"><strong>Attenzione:</strong> deterministico non significa casuale a ogni esecuzione. La derivazione produce risultati ripetibili; la sicurezza dipende soprattutto dalla qualità e segretezza del materiale iniziale, dalla protezione del dispositivo e dall’eventuale passphrase.</div>
+    </section>
+
+    <section id="bip39">
+      <div class="section-head"><div><div class="eyebrow">04 / Mnemonic e seed</div><h2>BIP-39 in breve</h2></div></div>
+      <div class="grid-3">
+        <article class="card info"><div class="num">A · ENTROPIA</div><h3>Entropia + checksum</h3><p class="muted">BIP-39 usa 128–256 bit di entropia, in passi di 32 bit. Il checksum aggiunge <code>ENT/32</code> bit presi dall’hash SHA-256 dell’entropia.</p></article>
+        <article class="card info"><div class="num">B · PAROLE</div><h3>Indici da 11 bit</h3><p class="muted">Entropia e checksum vengono concatenati e divisi in gruppi da 11 bit, che selezionano parole dalla lista. Le lunghezze ammesse sono 12, 15, 18, 21 o 24 parole.</p></article>
+        <article class="card info"><div class="num">C · SEED</div><h3>PBKDF2-HMAC-SHA512</h3><p class="muted">La frase mnemonic è la password; il salt è <code>"mnemonic" + passphrase</code>. Si usano 2048 iterazioni e si ottengono 64 byte di seed.</p></article>
+      </div>
+      <p class="small" style="margin-top:12px">Il checksum BIP-39 e il checksum EIP-55 sono due meccanismi diversi: il primo controlla parte della validità delle parole; il secondo protegge la rappresentazione testuale dell’indirizzo Ethereum.</p>
+    </section>
+
+    <section id="path">
+      <div class="section-head"><div><div class="eyebrow">05 / BIP-32 e BIP-44</div><h2>Leggere un derivation path Ethereum</h2></div></div>
+      <div class="card info">
+        <p class="muted">Un percorso comunemente usato per un account Ethereum è:</p>
+        <span class="formula mono">m / 44' / 60' / 0' / 0 / 0</span>
+        <div class="path-parts" role="group" aria-label="Componenti del derivation path">
+          <button class="path-part" data-path="0" aria-pressed="true">m</button>
+          <button class="path-part" data-path="1" aria-pressed="false">44'</button>
+          <button class="path-part" data-path="2" aria-pressed="false">60'</button>
+          <button class="path-part" data-path="3" aria-pressed="false">0'</button>
+          <button class="path-part" data-path="4" aria-pressed="false">0</button>
+          <button class="path-part" data-path="5" aria-pressed="false">0</button>
+        </div>
+        <div class="path-explain" id="path-explain" aria-live="polite"><strong>m</strong> — radice dell’albero HD, da cui discendono tutte le chiavi.</div>
+        <p class="small" style="margin-top:13px">L’apostrofo indica derivazione hardened in BIP-32. Il valore coin type <code>60'</code> identifica Ether nella registrazione SLIP-0044. I wallet possono offrire percorsi alternativi: per recuperare un account è importante usare la stessa convenzione di derivazione.</p>
+      </div>
+    </section>
+
+    <section id="crypto">
+      <div class="section-head"><div><div class="eyebrow">06 / Crittografia e hash</div><h2>Dalla chiave privata all’indirizzo</h2></div></div>
+      <div class="grid-2">
+        <article class="card info">
+          <span class="label">Public-key cryptography</span><h3>secp256k1 ed ECDSA</h3>
+          <span class="formula mono">Q = d · G</span>
+          <p class="muted"><code>d</code> è la chiave privata, un intero valido nell’intervallo definito dall’ordine della curva; <code>G</code> è il punto generatore pubblico; <code>Q</code> è la chiave pubblica. Ricavare <code>Q</code> da <code>d</code> è efficiente, mentre recuperare <code>d</code> da <code>Q</code> è ritenuto computazionalmente impraticabile con gli algoritmi classici noti.</p>
+          <p class="muted">La curva supporta firme digitali: il wallet firma una transazione con il segreto e la rete ne verifica la firma. Questo non è cifrare un messaggio.</p>
+        </article>
+        <article class="card info">
+          <span class="label">Hashing</span><h3>Keccak-256 e indirizzo</h3>
+          <span class="formula mono">address = last20(Keccak-256(pubkey[64 byte]))</span>
+          <p class="muted">Ethereum usa la chiave pubblica non compressa rappresentata dai 64 byte di coordinate <code>x || y</code>, senza il byte iniziale <code>0x04</code>. Si calcola Keccak-256 e si prendono gli ultimi 20 byte (160 bit), poi si rappresentano in esadecimale con prefisso <code>0x</code>.</p>
+          <p class="muted">Un hash è una funzione unidirezionale: non è una firma, non è una cifratura e non conserva la lunghezza dell’input.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="eip55">
+      <div class="section-head"><div><div class="eyebrow">07 / Integrità testuale</div><h2>EIP-55: il checksum dell’indirizzo</h2></div></div>
+      <div class="grid-2">
+        <article class="card info">
+          <h3>Come funziona</h3>
+          <ol class="muted" style="padding-left:21px;margin-bottom:0">
+            <li>Si prende l’indirizzo di 40 caratteri esadecimali e lo si porta in minuscolo, escludendo <code>0x</code>.</li>
+            <li>Si calcola Keccak-256 sulla stringa ASCII in minuscolo (non sui 20 byte binari dell’indirizzo).</li>
+            <li>Per ogni carattere alfabetico <code>a–f</code>, lo si rende maiuscolo se il nibble corrispondente dell’hash è almeno 8; altrimenti resta minuscolo.</li>
+          </ol>
+        </article>
+        <article class="card info">
+          <h3>Che cosa garantisce — e cosa no</h3>
+          <p class="muted">Il casing misto permette di individuare molti errori di digitazione accidentali senza cambiare la lunghezza dell’indirizzo. La specifica EIP-55 stima circa 15 bit di controllo in media e una probabilità dello 0,0247% che un indirizzo errato casuale superi il controllo.</p>
+          <p class="muted"><strong>Non</strong> dimostra che il destinatario sia quello desiderato, non autentica una persona e non impedisce ogni errore. Bisogna comunque verificare l’indirizzo completo prima di inviare fondi.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="statistiche">
+      <div class="section-head"><div><div class="eyebrow">08 / Statistical properties</div><h2>Le proprietà statistiche in sintesi</h2></div></div>
+      <div class="stats">
+        <article class="card stat"><div class="small">Mnemonic da 12 parole</div><div class="value">128 bit</div><p>Entropia iniziale tipica: uno spazio di <span class="mono">2¹²⁸</span> valori prima di considerare il checksum.</p></article>
+        <article class="card stat"><div class="small">Mnemonic da 24 parole</div><div class="value">256 bit</div><p>Entropia iniziale massima standard: uno spazio di <span class="mono">2²⁵⁶</span> valori.</p></article>
+        <article class="card stat"><div class="small">Indirizzo Ethereum</div><div class="value">160 bit</div><p>20 byte, quindi <span class="mono">2¹⁶⁰</span> possibili valori in uno spazio ideale.</p></article>
+        <article class="card stat"><div class="small">Checksum EIP-55</div><div class="value">≈ 0,0247%</div><p>Stima nella specifica della probabilità di passare accidentalmente il controllo con un indirizzo errato casuale.</p></article>
+      </div>
+      <div class="card info" style="margin-top:15px">
+        <h3>Che cosa vuol dire “statisticamente robusto”?</h3>
+        <p class="muted">Una hash crittografica è progettata per mostrare un comportamento simile a quello di un output pseudocasuale: piccoli cambiamenti nell’input devono cambiare diffusamente il digest (effetto valanga) e non devono emergere bias sfruttabili. È una proprietà attesa dal progetto, non una garanzia che ogni campione finito sia perfettamente uniforme.</p>
+        <p class="muted">Per un digest di 256 bit, una ricerca generica di collisioni ha ordine di grandezza <span class="mono">2¹²⁸</span> (limite del compleanno); per l’indirizzo troncato a 160 bit, l’ordine di grandezza è <span class="mono">2⁸⁰</span>. Trovare un preimage per un valore specifico di 160 bit ha invece costo generico dell’ordine di <span class="mono">2¹⁶⁰</span>. Sono stime ideali classiche, non tempi pratici precisi, e non sostituiscono l’analisi di sicurezza della pipeline completa.</p>
+        <p class="muted">La curva secp256k1 ha chiavi private rappresentate da scalari di circa 256 bit, ma la sicurezza generica del problema del logaritmo discreto su curve ellittiche è comunemente stimata intorno a 128 bit, ad esempio tramite algoritmi di tipo Pollard-rho.</p>
+      </div>
+    </section>
+
+    <section id="sha">
+      <div class="section-head"><div><div class="eyebrow">09 / Hash function families</div><h2>SHA-2 / SHA-512 non è Keccak-256</h2></div></div>
+      <div class="compare">
+        <article class="card info">
+          <span class="label">SHA-2</span><h3>SHA-512</h3>
+          <p class="muted">Appartiene alla famiglia SHA-2, standardizzata da NIST nel Secure Hash Standard. SHA-512 produce un digest di 512 bit. Nel wallet è usata, tra gli altri, come funzione HMAC dentro PBKDF2 di BIP-39 e nella derivazione master di BIP-32.</p>
+          <span class="formula mono">BIP-39: PBKDF2-HMAC-SHA512</span>
+        </article>
+        <article class="card info">
+          <span class="label">Keccak / SHA-3</span><h3>Keccak-256</h3>
+          <p class="muted">SHA-3 è la famiglia selezionata da NIST a partire dal progetto Keccak e standardizzata nel 2015. Usa una costruzione sponge, diversa da quella della famiglia SHA-2. Ethereum usa la variante Keccak-256 originale, non la funzione standard SHA3-256 con la sua diversa convenzione di padding/domain separation.</p>
+          <span class="formula mono">Ethereum address: Keccak-256</span>
+        </article>
+      </div>
+      <div class="callout"><strong>Conseguenza pratica:</strong> anche se entrambe restituiscono 256 bit nelle rispettive varianti a 256 bit, Keccak-256 e SHA3-256 producono digest diversi per lo stesso input. Sostituire una con l’altra nella derivazione dell’indirizzo genera un indirizzo errato.</div>
+    </section>
+
+    <section id="timeline">
+      <div class="section-head"><div><div class="eyebrow">10 / Contesto storico</div><h2>Una breve linea temporale</h2></div></div>
+      <div class="timeline">
+        <article class="card event"><div class="year">1977–78</div><p><em>RSA</em><br>Il memo tecnico MIT su RSA è datato 1977; l’articolo scientifico viene pubblicato nel 1978. È uno dei primi sistemi pubblicati di crittografia a chiave pubblica.</p></article>
+        <article class="card event"><div class="year">2001–02</div><p><em>SHA-2 / SHA-512</em><br>Famiglia sviluppata a cavallo del 2001; lo standard NIST FIPS 180-2 che include SHA-256 e SHA-512 viene pubblicato nell’agosto 2002.</p></article>
+        <article class="card event"><div class="year">2012</div><p><em>BIP-32</em><br>Specifica wallet deterministici gerarchici e derivazione di chiavi figlie.</p></article>
+        <article class="card event"><div class="year">2013</div><p><em>BIP-39</em><br>Definisce il codice mnemonic e la conversione delle parole in seed.</p></article>
+        <article class="card event"><div class="year">2014</div><p><em>BIP-44</em><br>Specifica la gerarchia multi-account con purpose, coin type e indici.</p></article>
+        <article class="card event"><div class="year">2015</div><p><em>SHA-3</em><br>NIST pubblica FIPS 202, basato sulla famiglia Keccak selezionata dal concorso SHA-3.</p></article>
+        <article class="card event"><div class="year">2016</div><p><em>EIP-55</em><br>Propone indirizzi Ethereum con checksum codificato tramite maiuscole e minuscole.</p></article>
+      </div>
+      <p class="small" style="margin-top:12px">Nota cronologica: per essere precisi, la pubblicazione del memo RSA risale al 1977, mentre il celebre articolo è del 1978; per SHA-2 è utile distinguere lo sviluppo della famiglia dalla pubblicazione formale di FIPS 180-2 nel 2002.</p>
+    </section>
+
+    <section id="why">
+      <div class="section-head"><div><div class="eyebrow">11 / Design rationale</div><h2>Perché non usare un solo algoritmo?</h2></div></div>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Problema</th><th>Componente</th><th>Perché non basta un altro componente?</th></tr></thead>
+          <tbody>
+            <tr><td>Ricordare / ripristinare il segreto</td><td>BIP-39</td><td>La mnemonic offre una rappresentazione umana e un modo standard di derivare un seed; una curva ellittica non definisce un formato di backup.</td></tr>
+            <tr><td>Organizzare molti account e indirizzi</td><td>BIP-32 + BIP-44</td><td>La derivazione HD e i path definiscono una struttura riproducibile; una hash da sola non definisce la gerarchia delle chiavi.</td></tr>
+            <tr><td>Firmare transazioni e verificare le firme</td><td>secp256k1 + ECDSA</td><td>Una funzione hash non crea una relazione privata/pubblica né una firma verificabile.</td></tr>
+            <tr><td>Ottenere un identificatore compatto dall’account</td><td>Keccak-256</td><td>La chiave pubblica è un dato più lungo; la hash crea il digest e la convenzione Ethereum ne tronca 20 byte per l’indirizzo.</td></tr>
+            <tr><td>Ridurre errori di trascrizione</td><td>EIP-55</td><td>La codifica mista aggiunge un controllo alla forma testuale; non è un nuovo sistema di chiavi o un meccanismo di firma.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="pratica">
+      <div class="section-head"><div><div class="eyebrow">12 / Osservazione pratica</div><h2>Come verificare il flusso in un wallet</h2></div></div>
+      <div class="grid-2">
+        <article class="card info">
+          <h3>Checklist per la relazione</h3>
+          <ul class="checklist">
+            <li>Creare un wallet di prova in un’app affidabile e annotare quali standard o path dichiara di usare.</li>
+            <li>Verificare che lo stesso backup ripristinato nello stesso contesto produca gli stessi indirizzi.</li>
+            <li>Osservare il formato dell’indirizzo: prefisso <code>0x</code>, 40 cifre esadecimali e casing compatibile con EIP-55.</li>
+            <li>Se l’app lo mostra, annotare il percorso di derivazione e confrontare la sua struttura con BIP-44.</li>
+          </ul>
+        </article>
+        <aside class="warning">
+          <h3>Regola di sicurezza</h3>
+          <p class="muted">Usa soltanto un wallet di test e non condividere mai la tua mnemonic, seed, chiave privata o passphrase. Non inserirli in siti web, chatbot, moduli online o strumenti di terze parti per “verificare” un indirizzo. Per questa spiegazione non occorre alcun segreto reale.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section id="glossario">
+      <div class="section-head"><div><div class="eyebrow">13 / Glossario</div><h2>Le cinque distinzioni da ricordare</h2></div></div>
+      <div class="grid-3">
+        <article class="card info"><h3>Derivazione</h3><p class="muted">Trasformazione deterministica da un segreto/chiave padre e un indice a una chiave figlia.</p></article>
+        <article class="card info"><h3>Crittografia a chiave pubblica</h3><p class="muted">Relazione matematica tra chiave privata e pubblica, usata qui soprattutto per firme digitali.</p></article>
+        <article class="card info"><h3>Hashing</h3><p class="muted">Funzione unidirezionale che mappa dati arbitrari in un digest a lunghezza fissa.</p></article>
+        <article class="card info"><h3>Checksum</h3><p class="muted">Informazione di controllo che aiuta a riconoscere errori, ma non certifica la correttezza semantica.</p></article>
+        <article class="card info"><h3>Encoding</h3><p class="muted">Rappresentazione di dati in simboli, per esempio byte mostrati come caratteri esadecimali.</p></article>
+        <article class="card info"><h3>Determinismo</h3><p class="muted">Stessi input e stessa procedura generano lo stesso risultato: è la proprietà chiave del ripristino HD.</p></article>
+      </div>
+    </section>
+
+    <section id="fonti">
+      <div class="section-head"><div><div class="eyebrow">14 / Riferimenti</div><h2>Fonti e specifiche</h2></div></div>
+      <div class="card sources">
+        <p class="muted">Per una relazione accademica, le specifiche e gli standard primari sono preferibili a tutorial non verificati.</p>
+        <ol>
+          <li><a href="https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki" target="_blank" rel="noopener noreferrer">BIP-39 — Mnemonic code for generating deterministic keys</a>.</li>
+          <li><a href="https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki" target="_blank" rel="noopener noreferrer">BIP-32 — Hierarchical Deterministic Wallets</a>.</li>
+          <li><a href="https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki" target="_blank" rel="noopener noreferrer">BIP-44 — Multi-Account Hierarchy for Deterministic Wallets</a>.</li>
+          <li><a href="https://github.com/satoshilabs/slips/blob/master/slip-0044.md" target="_blank" rel="noopener noreferrer">SLIP-0044 — Registered coin types (Ether = 60)</a>.</li>
+          <li><a href="https://ethereum.org/en/developers/docs/accounts/" target="_blank" rel="noopener noreferrer">Ethereum.org — Accounts and address derivation</a>.</li>
+          <li><a href="https://eips.ethereum.org/EIPS/eip-55" target="_blank" rel="noopener noreferrer">EIP-55 — Mixed-case checksum address encoding</a>.</li>
+          <li><a href="https://csrc.nist.gov/pubs/fips/180-2/final" target="_blank" rel="noopener noreferrer">NIST FIPS 180-2 — Secure Hash Standard (SHA-2)</a>.</li>
+          <li><a href="https://csrc.nist.gov/pubs/fips/202/final" target="_blank" rel="noopener noreferrer">NIST FIPS 202 — SHA-3 Standard, basato su Keccak</a>.</li>
+          <li><a href="https://dspace.mit.edu/entities/publication/a2e09fea-6f05-48a5-9ce9-5073dfcde567" target="_blank" rel="noopener noreferrer">MIT — RSA technical report, aprile 1977</a>.</li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="wrap">HMWK 2 · From Wallet Seed to Ethereum Address <span style="float:right"><a class="top-link" href="#top">Torna all’inizio ↑</a></span></div></footer>
+
+  <script>
+    const stageData = [
+      {
+        tag: 'STEP 01 · Input', title: 'Entropia → mnemonic',
+        body: 'Un generatore crittograficamente sicuro (CSPRNG) produce bit casuali. BIP-39 aggiunge un checksum derivato da SHA-256 e divide la sequenza in gruppi da 11 bit, ciascuno associato a una parola della wordlist.',
+        fact: '<strong>Idea chiave</strong><br>La mnemonic è una rappresentazione leggibile dell’entropia, non una password scelta liberamente dall’utente e non una cifratura del wallet.'
+      },
+      {
+        tag: 'STEP 02 · BIP-39', title: 'Mnemonic → seed binario',
+        body: 'BIP-39 usa PBKDF2 con HMAC-SHA512, 2048 iterazioni e output di 64 byte. Il salt è la stringa “mnemonic” concatenata all’eventuale passphrase; passphrase diverse producono seed diversi.',
+        fact: '<strong>Output</strong><br>512 bit (64 byte). La conversione frase → seed è distinta dalla procedura che genera la frase a partire dall’entropia.'
+      },
+      {
+        tag: 'STEP 03 · BIP-32 / BIP-44', title: 'Seed → chiave privata figlia',
+        body: 'BIP-32 usa HMAC-SHA512 per derivare una chiave master e un chain code, poi chiavi figlie indicizzate. BIP-44 convenziona l’organizzazione del percorso per moneta, account, ramo e indice.',
+        fact: '<strong>Per Ethereum</strong><br>Un percorso comune è <code>m/44\'/60\'/0\'/0/0</code>. Il percorso è una convenzione di derivazione, non una funzione di hash.'
+      },
+      {
+        tag: 'STEP 04 · secp256k1', title: 'Chiave privata → chiave pubblica',
+        body: 'La chiave privata è uno scalare d; la chiave pubblica è il punto Q = dG sulla curva. La relazione è facile da calcolare in avanti ma progettata per rendere impraticabile il recupero del segreto dal punto pubblico.',
+        fact: '<strong>Uso principale</strong><br>Il wallet firma le transazioni con la chiave privata; i nodi verificano le firme. La firma digitale non equivale a cifrare la transazione.'
+      },
+      {
+        tag: 'STEP 05 · Keccak-256', title: 'Chiave pubblica → indirizzo',
+        body: 'Ethereum calcola Keccak-256 sulla chiave pubblica non compressa senza il prefisso 0x04, quindi prende gli ultimi 20 byte del digest. L’indirizzo risultante è lungo 160 bit.',
+        fact: '<strong>Da ricordare</strong><br>Keccak-256 non è identico a SHA3-256: la differenza nella convenzione di padding produce hash differenti.'
+      },
+      {
+        tag: 'STEP 06 · EIP-55', title: 'Indirizzo → forma checksummed',
+        body: 'EIP-55 esegue Keccak-256 sul testo esadecimale in minuscolo (senza 0x) e usa i nibble dell’hash per decidere quali lettere rendere maiuscole. La forma mista consente di rilevare molti errori di trascrizione.',
+        fact: '<strong>Limite</strong><br>È un checksum, non una firma e non una prova d’identità. Non sostituisce la verifica dell’indirizzo destinatario.'
+      }
+    ];
+    document.querySelectorAll('.stage').forEach(button => {
+      button.addEventListener('click', () => {
+        const index = Number(button.dataset.stage);
+        document.querySelectorAll('.stage').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+        const item = stageData[index];
+        document.getElementById('detail-tag').textContent = item.tag;
+        document.getElementById('detail-title').textContent = item.title;
+        document.getElementById('detail-body').textContent = item.body;
+        document.getElementById('detail-fact').innerHTML = item.fact;
+      });
+    });
+    const pathData = [
+      '<strong>m</strong> — radice dell’albero HD, da cui discendono tutte le chiavi.',
+      '<strong>44\'</strong> — purpose: indica che si usa la struttura gerarchica definita da BIP-44. Apostrofo = derivazione hardened.',
+      '<strong>60\'</strong> — coin type registrato per Ether (ETH) in SLIP-0044; è un livello hardened.',
+      '<strong>0\'</strong> — account index: il primo account, con derivazione hardened.',
+      '<strong>0</strong> — ramo esterno (external chain), tipicamente usato per gli indirizzi di ricezione.',
+      '<strong>0</strong> — indice dell’indirizzo all’interno del ramo selezionato; il successivo sarebbe normalmente 1.'
+    ];
+    document.querySelectorAll('.path-part').forEach(button => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('.path-part').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+        document.getElementById('path-explain').innerHTML = pathData[Number(button.dataset.path)];
+      });
+    });
+  </script>
+</body>
+</html>
