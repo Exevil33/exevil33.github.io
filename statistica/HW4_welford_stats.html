@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welford e Stime Campionarie</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: #111827;
+            --neon-green: #10b981;
+            --neon-blue: #3b82f6;
+            --text-main: #e2e8f0;
+            --grid-line: #334155;
+            --c-mean: #059669;
+            --c-var: #d97706;
+            --c-alt: #3b82f6;
+            color-scheme: dark;
+        }
+        html { scroll-behavior: smooth; }
+        body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .font-mono { font-family: 'Fira Code', monospace; }
+        .neon-text-green { color: var(--neon-green); text-shadow: 0 0 5px rgba(16, 185, 129, 0.5); }
+        .neon-text-blue  { color: var(--neon-blue);  text-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+        .neon-border { border: 1px solid var(--neon-blue); box-shadow: 0 0 10px rgba(59, 130, 246, 0.2); }
+
+        /* Custom Scrollbar (come HW1) */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--neon-blue); }
+
+        section[id], div[id^="ex"] { scroll-margin-top: 4.5rem; }
+        .font-mono, .tbl, .kv, svg text, input, select, textarea, pre { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
+
+        .tbl { width: 100%; border-collapse: collapse; }
+        .tbl th { text-align: left; font-weight: 600; color: #cbd5e1; border-bottom: 1px solid #334155; padding: .45rem .6rem; font-family: 'Fira Code', monospace; font-size: .72rem; letter-spacing: .02em; white-space: nowrap; }
+        .tbl td { border-bottom: 1px solid #1f2937; padding: .4rem .6rem; vertical-align: top; color: #d1d5db; }
+        .tbl tr:last-child td { border-bottom: none; }
+        .tbl.compact th, .tbl.compact td { padding-left: .4rem; padding-right: .4rem; }
+        .tbl .num { font-variant-numeric: tabular-nums; font-family: 'Fira Code', monospace; text-align: right; }
+        .tbl tr.cur td { background: rgba(16,185,129,.12); }
+        .tbl tr.fin td { background: rgba(59,130,246,.14); }
+        .tbl td.ok { color: #34d399; } .tbl td.ko { color: #f87171; } .tbl td.wa { color: #fbbf24; }
+
+        .kv { display: grid; grid-template-columns: max-content 1fr; gap: .25rem .75rem; align-items: baseline; }
+        .kv > dt { font-family: 'Fira Code', monospace; font-size: .7rem; color: #64748b; }
+        .kv > dd { font-family: 'Fira Code', monospace; font-size: .75rem; color: #e5e7eb; word-break: break-all; }
+
+        #chart-tip { position: fixed; z-index: 60; pointer-events: none; background: #0f172a; border: 1px solid var(--neon-blue); box-shadow: 0 0 10px rgba(59,130,246,.25); border-radius: .375rem; padding: .4rem .6rem; font-family: 'Fira Code', monospace; font-size: .72rem; color: #94a3b8; max-width: 320px; }
+        #chart-tip .tv { color: #f1f5f9; font-weight: 600; }
+        .chart-host svg { display: block; }
+
+        .tile { background: rgba(15,23,42,.6); border: 1px solid #1f2937; border-radius: .5rem; padding: .6rem .75rem; }
+        .tile .lbl { font-size: .7rem; color: #94a3b8; }
+        .tile .val { font-size: 1.3rem; font-weight: 600; color: #f1f5f9; line-height: 1.25; }
+        .tile .ref { font-family: 'Fira Code', monospace; font-size: .66rem; color: #64748b; }
+
+        .btn-ghost { border: 1px solid #374151; color: #d1d5db; background: transparent; font-family: 'Fira Code', monospace; font-size: .7rem; letter-spacing: .03em; padding: .4rem .7rem; border-radius: .25rem; transition: border-color .2s, color .2s, box-shadow .2s; }
+        .btn-ghost:hover { border-color: var(--neon-blue); color: #fff; box-shadow: 0 0 8px rgba(59,130,246,.3); }
+        .btn-ghost:disabled { opacity: .45; cursor: not-allowed; }
+        .seg { display: inline-flex; border: 1px solid #374151; border-radius: .3rem; overflow: hidden; }
+        .seg button { font-family: 'Fira Code', monospace; font-size: .7rem; padding: .35rem .7rem; color: #9ca3af; background: transparent; transition: background .2s, color .2s; }
+        .seg button + button { border-left: 1px solid #374151; }
+        .seg button:hover { color: #fff; }
+        .seg button[aria-pressed="true"] { background: #2563eb; color: #fff; box-shadow: inset 0 0 12px rgba(147,197,253,.25); }
+        input[type=range] { accent-color: #3b82f6; }
+
+        details > summary { cursor: pointer; list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        details > summary::before { content: '▸ '; color: #64748b; }
+        details[open] > summary::before { content: '▾ '; }
+
+        #log-1 > div, #log-2 > div, #selftest-log > div { overflow-wrap: anywhere; }
+        .ok { color: #34d399; } .ko { color: #f87171; } .wa { color: #fbbf24; }
+        .formula { font-family: 'Fira Code', monospace; color: #e5e7eb; }
+        .eq { font-family: 'Fira Code', monospace; color: #e5e7eb; background: rgba(15,23,42,.7); border: 1px solid #1f2937; border-radius: .375rem; padding: .55rem .8rem; overflow-x: auto; white-space: nowrap; }
+        .eq.key { border-color: rgba(16,185,129,.55); box-shadow: 0 0 10px rgba(16,185,129,.18); }
+        .step-n { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border-radius: 9999px; border: 1px solid #10b981; color: #6ee7b7; font-family: 'Fira Code', monospace; font-size: .7rem; flex-shrink: 0; }
+
+        /* blocchi di codice */
+        pre.code { font-family: 'Fira Code', monospace; font-size: .8rem; line-height: 1.6; background: #0a0e17; border: 1px solid #1f2937; border-radius: .5rem; padding: .9rem 0; overflow-x: auto; color: #cbd5e1; }
+        pre.code .ln { display: block; padding: 0 1rem; border-left: 3px solid transparent; }
+        pre.code .ln.core { background: rgba(16,185,129,.10); border-left-color: #10b981; }
+        .tk-k { color: #60a5fa; } .tk-c { color: #64748b; font-style: italic; } .tk-n { color: #fbbf24; } .tk-f { color: #6ee7b7; } .tk-s { color: #fca5a5; }
+
+        .ex-banner { border: 1px solid rgba(59,130,246,.45); background: linear-gradient(90deg, rgba(37,99,235,.14), rgba(16,185,129,.06)); border-radius: .5rem; }
+
+        #traj-wrap { position: relative; width: 100%; }
+        #traj-canvas { display: block; width: 100%; background-color: #0f172a; border-radius: 0.5rem; cursor: crosshair; }
+
+        @media print { nav, .no-print { display: none !important; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto space-y-8">
+
+        <header class="text-center space-y-2 border-b border-gray-800 pb-6">
+            <h1 class="text-3xl md:text-4xl font-bold neon-text-blue font-mono tracking-tighter">&gt; WELFORD_STATS</h1>
+            <p class="text-gray-400">Formule ricorsive di Welford e distribuzione campionaria di media e varianza</p>
+            <p class="text-sm font-mono text-gray-500">Mₖ = Mₖ₋₁ + δₖ/k | Sₖ = Sₖ₋₁ + δₖ(xₖ − Mₖ) | s² = Sₙ/(n − 1) | HMWK 4</p>
+        </header>
+
+        <nav class="sticky top-0 z-40 bg-[#0b0f19]/95 backdrop-blur border-b border-gray-800 -mt-4 py-3">
+            <div class="flex gap-5 overflow-x-auto whitespace-nowrap text-xs font-mono text-gray-500 pb-1">
+                <a href="#ex1" class="text-blue-400/80 hover:text-blue-300 transition-colors">ES.1</a>
+                <a href="#derivazione" class="hover:text-blue-400 transition-colors">01·derivazione</a>
+                <a href="#codice" class="hover:text-blue-400 transition-colors">02·codice</a>
+                <a href="#stabilita" class="hover:text-blue-400 transition-colors">03·stabilità</a>
+                <a href="#ex2" class="text-blue-400/80 hover:text-blue-300 transition-colors">ES.2</a>
+                <a href="#simulazione" class="hover:text-blue-400 transition-colors">04·simulazione</a>
+                <a href="#confronto" class="hover:text-blue-400 transition-colors">05·confronto_μ_σ²</a>
+                <a href="#variabilita" class="hover:text-blue-400 transition-colors">06·variabilità</a>
+                <a href="#conclusioni" class="hover:text-blue-400 transition-colors">07·conclusioni</a>
+                <a href="#selftest" class="hover:text-blue-400 transition-colors">08·self-test</a>
+            </div>
+        </nav>
+
+        <!-- ================================================================= -->
+        <!-- ESERCIZIO 1                                                        -->
+        <!-- ================================================================= -->
+        <div id="ex1" class="ex-banner px-5 py-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="text-xl md:text-2xl font-bold font-mono neon-text-blue">ESERCIZIO 1 · Formule ricorsive di Welford</h2>
+            <span class="text-sm text-gray-400">somma dei quadrati e varianza con lo stesso approccio di Knuth per la media</span>
+        </div>
+
+        <section id="derivazione" class="bg-gray-900 rounded-lg p-6 lg:p-8 neon-border space-y-6">
+            <h2 class="text-2xl font-bold neon-text-green">== 01 · Derivazione ==</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-300 leading-relaxed">
+                <div class="space-y-3">
+                    <h3 class="text-lg font-semibold text-white">Il punto di partenza: la media di Knuth</h3>
+                    <p>Data la sequenza di punteggi x₁, x₂, …, la media dei primi k valori è Mₖ = (1/k)·Σᵢ₌₁ᵏ xᵢ. Invece di ricalcolare la somma, si separa l'ultimo termine e si esprime il resto con la media precedente:</p>
+                    <div class="eq">Mₖ = ((k − 1)·Mₖ₋₁ + xₖ) / k</div>
+                    <div class="eq key">Mₖ = Mₖ₋₁ + (xₖ − Mₖ₋₁) / k&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-gray-500">M₀ = 0</span></div>
+                    <p>Nuova stima = vecchia stima + <strong class="text-white">errore di previsione</strong> δₖ = xₖ − Mₖ₋₁ diviso per k. Servono solo due numeri in memoria (k e Mₖ) e non si accumula mai una somma enorme. Due identità che useremo:</p>
+                    <div class="eq">Mₖ − Mₖ₋₁ = δₖ / k&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xₖ − Mₖ = δₖ − δₖ/k = ((k − 1)/k)·δₖ</div>
+                </div>
+                <div class="space-y-3">
+                    <h3 class="text-lg font-semibold text-white">Stesso approccio per la somma dei quadrati</h3>
+                    <p>Sia Sₖ = Σᵢ₌₁ᵏ (xᵢ − Mₖ)² la somma dei quadrati degli scarti (SS). Come per la media, si separano i primi k − 1 termini dall'ultimo e li si riscrive rispetto alla media precedente Mₖ₋₁.</p>
+                    <ol class="space-y-2">
+                        <li class="flex gap-3"><span class="step-n">1</span><span>Per i &lt; k: xᵢ − Mₖ = (xᵢ − Mₖ₋₁) − (Mₖ − Mₖ₋₁) = (xᵢ − Mₖ₋₁) − δₖ/k.</span></li>
+                        <li class="flex gap-3"><span class="step-n">2</span><span>Quindi Sₖ = Σᵢ₌₁ᵏ⁻¹ [(xᵢ − Mₖ₋₁) − δₖ/k]² + (xₖ − Mₖ)².</span></li>
+                        <li class="flex gap-3"><span class="step-n">3</span><span>Sviluppando il quadrato: Σ(xᵢ − Mₖ₋₁)² = Sₖ₋₁; il doppio prodotto si annulla perché Σᵢ₌₁ᵏ⁻¹ (xᵢ − Mₖ₋₁) = 0; restano (k − 1)·δₖ²/k².</span></li>
+                        <li class="flex gap-3"><span class="step-n">4</span><span>L'ultimo termine vale (xₖ − Mₖ)² = (k − 1)²·δₖ²/k².</span></li>
+                        <li class="flex gap-3"><span class="step-n">5</span><span>Sommando: Sₖ = Sₖ₋₁ + (k − 1)δₖ²(1 + k − 1)/k² = Sₖ₋₁ + ((k − 1)/k)·δₖ².</span></li>
+                        <li class="flex gap-3"><span class="step-n">6</span><span>E poiché ((k − 1)/k)·δₖ = xₖ − Mₖ:</span></li>
+                    </ol>
+                    <div class="eq key">Sₖ = Sₖ₋₁ + (xₖ − Mₖ₋₁)·(xₖ − Mₖ)&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-gray-500">S₀ = S₁ = 0</span></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-300 leading-relaxed border-t border-gray-800 pt-6">
+                <div class="space-y-3">
+                    <h3 class="text-lg font-semibold text-white">Dalla SS alla varianza</h3>
+                    <p>La varianza campionaria (con la correzione di Bessel) e quella "di popolazione" si ottengono dividendo Sₖ:</p>
+                    <div class="eq key">s²ₖ = Sₖ / (k − 1)&nbsp;&nbsp;(k ≥ 2)&nbsp;&nbsp;&nbsp;&nbsp;σ̂²ₖ = Sₖ / k</div>
+                    <p>Sostituendo la ricorrenza di Sₖ si ottengono anche ricorrenze dirette, con la stessa struttura di Knuth "vecchio + correzione":</p>
+                    <div class="eq">s²ₖ = s²ₖ₋₁ + δₖ²/k − s²ₖ₋₁/(k − 1)&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-gray-500">(s²₁ := 0)</span></div>
+                    <div class="eq">σ̂²ₖ = σ̂²ₖ₋₁ + [δₖ·(xₖ − Mₖ) − σ̂²ₖ₋₁] / k</div>
+                    <p class="text-xs text-gray-500">L'ultima è identica alla formula di Knuth: si "media" la quantità δₖ(xₖ − Mₖ) come Mₖ media xₖ. In pratica conviene aggiornare Sₖ (una moltiplicazione e un'addizione) e dividere solo quando serve la varianza.</p>
+                </div>
+                <div class="space-y-3">
+                    <h3 class="text-lg font-semibold text-white">Perché non Σx² − (Σx)²/n?</h3>
+                    <p>La formula "da manuale" s² = (Σxᵢ² − (Σxᵢ)²/n)/(n − 1) è algebricamente equivalente ma <strong class="text-white">numericamente instabile</strong>: sottrae due numeri enormi e quasi uguali, e in virgola mobile le cifre significative si perdono (cancellazione catastrofica). Welford lavora solo con gli scarti δₖ, piccoli quanto i dati sono dispersi (sezione 03).</p>
+                    <h3 class="text-lg font-semibold text-white pt-2">Fusione di accumulatori (Chan, Golub, LeVeque)</h3>
+                    <p>Due accumulatori (n<sub>A</sub>, M<sub>A</sub>, S<sub>A</sub>) e (n<sub>B</sub>, M<sub>B</sub>, S<sub>B</sub>), per esempio due hacker diversi, si combinano senza rileggere i dati:</p>
+                    <div class="eq">δ = M<sub>B</sub> − M<sub>A</sub>&nbsp;&nbsp;M = M<sub>A</sub> + δ·n<sub>B</sub>/n&nbsp;&nbsp;S = S<sub>A</sub> + S<sub>B</sub> + δ²·n<sub>A</sub>n<sub>B</sub>/n</div>
+                    <p class="text-xs text-gray-500">Con n<sub>B</sub> = 1 ritorna esattamente la formula di Welford. Nell'Es. 2 la usiamo per ottenere media e varianza di tutti gli m·n punteggi dagli m accumulatori.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="codice" class="space-y-6">
+            <div class="space-y-1">
+                <h2 class="text-2xl font-bold neon-text-green">== 02 · Codice: le 3 righe ==</h2>
+                <p class="text-gray-400 text-sm md:text-base">Il cuore dell'algoritmo sono tre righe (evidenziate). La simulazione dell'Es. 2 usa esattamente queste tre righe per ogni hacker e ogni sistema.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-gray-900 rounded-lg p-5 neon-border space-y-2">
+                    <div class="flex items-center justify-between"><h3 class="text-sm font-semibold text-gray-200">JavaScript</h3><span class="text-xs font-mono text-gray-500">usato in questa pagina</span></div>
+<pre class="code"><span class="ln"><span class="tk-k">function</span> <span class="tk-f">welford</span>(xs) {</span><span class="ln">  <span class="tk-k">let</span> k = <span class="tk-n">0</span>, mean = <span class="tk-n">0</span>, ss = <span class="tk-n">0</span>;</span><span class="ln">  <span class="tk-k">for</span> (<span class="tk-k">const</span> x <span class="tk-k">of</span> xs) {</span><span class="ln">    k++;</span><span class="ln core">    <span class="tk-k">const</span> d = x - mean;      <span class="tk-c">// δₖ = xₖ − Mₖ₋₁</span></span><span class="ln core">    mean += d / k;           <span class="tk-c">// Mₖ  (Knuth)</span></span><span class="ln core">    ss += d * (x - mean);    <span class="tk-c">// Sₖ  (Welford)</span></span><span class="ln">  }</span><span class="ln">  <span class="tk-k">return</span> { mean, ss, s2: ss / (k - <span class="tk-n">1</span>), pop: ss / k };</span><span class="ln">}</span></pre>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-5 neon-border space-y-2">
+                    <div class="flex items-center justify-between"><h3 class="text-sm font-semibold text-gray-200">Python</h3><span class="text-xs font-mono text-gray-500">stessa logica</span></div>
+<pre class="code"><span class="ln"><span class="tk-k">def</span> <span class="tk-f">welford</span>(xs):</span><span class="ln">    k, mean, ss = <span class="tk-n">0</span>, <span class="tk-n">0.0</span>, <span class="tk-n">0.0</span></span><span class="ln">    <span class="tk-k">for</span> x <span class="tk-k">in</span> xs:</span><span class="ln">        k += <span class="tk-n">1</span></span><span class="ln core">        d = x - mean          <span class="tk-c"># δₖ = xₖ − Mₖ₋₁</span></span><span class="ln core">        mean += d / k         <span class="tk-c"># Mₖ  (Knuth)</span></span><span class="ln core">        ss += d * (x - mean)  <span class="tk-c"># Sₖ  (Welford)</span></span><span class="ln">    <span class="tk-k">return</span> mean, ss / (k - <span class="tk-n">1</span>), ss / k</span><span class="ln"></span><span class="ln"><span class="tk-k">def</span> <span class="tk-f">merge</span>(a, b):  <span class="tk-c"># a, b = (k, mean, ss): Chan et al.</span></span><span class="ln">    (ka, ma, sa), (kb, mb, sb) = a, b</span><span class="ln">    k, d = ka + kb, mb - ma</span><span class="ln">    <span class="tk-k">return</span> k, ma + d * kb / k, sa + sb + d * d * ka * kb / k</span></pre>
+                </div>
+            </div>
+
+            <main class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-5 space-y-6">
+                    <div class="bg-gray-900 rounded-lg p-6 neon-border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-200">Parametri</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="data-1" class="block text-sm font-medium text-gray-400 mb-1">Punteggi x₁, x₂, … (0–10, separati da virgole o spazi)</label>
+                                <textarea id="data-1" rows="2" spellcheck="false" class="bg-gray-800 border border-gray-700 text-white text-sm rounded px-3 py-2 w-full focus:outline-none focus:border-blue-500 font-mono transition-colors">7, 3, 9, 4, 6, 10, 2, 5</textarea>
+                                <div id="data-1-status" class="text-xs font-mono mt-1"></div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <button id="btn-run-1" type="button" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">AVVIA</button>
+                                <button id="btn-instant-1" type="button" class="btn-ghost">CALCOLO ISTANTANEO</button>
+                                <button id="btn-random-1" type="button" class="btn-ghost">PUNTEGGI CASUALI</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 rounded-lg p-6 neon-border flex flex-col h-[360px]">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-200">Esecuzione Algoritmo</h2>
+                        <div id="log-1" class="flex-1 bg-black/50 rounded border border-gray-800 p-4 font-mono text-xs md:text-sm overflow-y-auto space-y-2" aria-live="polite"><div class="text-gray-500 italic">In attesa di avvio...</div></div>
+                    </div>
+                </div>
+                <div class="lg:col-span-7 bg-gray-900 rounded-lg p-6 neon-border space-y-4">
+                    <h2 class="text-xl font-semibold text-gray-200">Visualizzazione (Livello Guru)</h2>
+                    <div id="chart-trace" class="chart-host"></div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs font-mono text-gray-400">
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-gray-500 inline-block"></span> Punteggi xₖ</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-[0_0_5px_#10b981]"></span> Media corrente Mₖ</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm inline-block bg-amber-500/25 border border-amber-500/50"></span> Mₖ ± sₖ</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-0.5 inline-block bg-red-400"></span> Scarto δₖ = xₖ − Mₖ₋₁</div>
+                    </div>
+                    <div class="overflow-x-auto rounded border border-gray-800"><table class="tbl text-xs" id="trace-table"></table></div>
+                    <p id="trace-check" class="text-xs font-mono text-gray-500"></p>
+                </div>
+            </main>
+        </section>
+
+        <section id="stabilita" class="bg-gray-900 rounded-lg p-6 lg:p-8 neon-border space-y-6">
+            <h2 class="text-2xl font-bold neon-text-green">== 03 · Perché Welford: stabilità numerica ==</h2>
+            <p class="text-gray-300 leading-relaxed text-sm md:text-base">Stessi dati, spostati di una costante: la varianza non cambia, ma i numeri da sommare crescono. Il confronto usa tre algoritmi in doppia precisione (float64, ~16 cifre) e in singola precisione (float32, ~7 cifre, emulata arrotondando ogni operazione); il valore esatto è calcolato con aritmetica intera arbitraria (BigInt).</p>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-5 space-y-4">
+                    <div class="space-y-2">
+                        <span class="block text-sm text-gray-400">Dati di base</span>
+                        <div class="seg" id="stab-seg"><button type="button" data-set="classic">4, 7, 13, 16</button><button type="button" data-set="scores">20 PUNTEGGI 0–10</button></div>
+                        <p id="stab-data" class="text-xs font-mono text-gray-500 break-all"></p>
+                    </div>
+                    <div class="space-y-1">
+                        <label for="offset" class="text-sm text-gray-400">Spostamento c = 10<sup id="offset-exp">9</sup> aggiunto a ogni dato</label>
+                        <input id="offset" type="range" min="0" max="15" step="1" value="9" class="w-full">
+                    </div>
+                    <div class="overflow-x-auto rounded border border-gray-800"><table class="tbl compact text-xs" id="stab-table"></table></div>
+                    <p class="text-sm text-gray-300 leading-relaxed" id="stab-note"></p>
+                </div>
+                <div class="lg:col-span-7 space-y-3">
+                    <div class="seg" id="prec-seg"><button type="button" data-prec="64">FLOAT64 (DOUBLE)</button><button type="button" data-prec="32">FLOAT32 (SINGLE)</button></div>
+                    <div id="chart-stab" class="chart-host"></div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-gray-400" id="legend-stab"></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-300 leading-relaxed border-t border-gray-800 pt-5">
+                <div class="space-y-1"><h3 class="font-semibold text-white">Formula "da manuale"</h3><p>Con c = 10⁹ i quadrati valgono ~10¹⁸, oltre le 2⁵³ ≈ 9·10¹⁵ unità rappresentabili esattamente: la differenza Σx² − (Σx)²/n perde tutte le cifre utili e può diventare perfino <strong class="text-white">negativa</strong>, un risultato impossibile per una varianza.</p></div>
+                <div class="space-y-1"><h3 class="font-semibold text-white">Due passate</h3><p>Calcolare prima la media e poi Σ(x − x̄)² è accurato, ma richiede di <strong class="text-white">memorizzare tutti i dati</strong> e rileggerli: non si può fare su un flusso (log di attacco, eventi di un IDS) né con memoria costante.</p></div>
+                <div class="space-y-1"><h3 class="font-semibold text-white">Welford</h3><p>Una sola passata, memoria O(1) (k, Mₖ, Sₖ), aggiornamento in tempo reale e accuratezza paragonabile alle due passate: lavora sugli scarti δₖ, che hanno l'ordine di grandezza della dispersione e non della media.</p></div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- ESERCIZIO 2                                                        -->
+        <!-- ================================================================= -->
+        <div id="ex2" class="ex-banner px-5 py-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="text-xl md:text-2xl font-bold font-mono neon-text-blue">ESERCIZIO 2 · Media e varianza campionaria</h2>
+            <span class="text-sm text-gray-400">m hacker × n sistemi, punteggi 0–10, Welford per ogni hacker</span>
+        </div>
+
+        <section id="simulazione" class="space-y-6">
+            <div class="space-y-1">
+                <h2 class="text-2xl font-bold neon-text-green">== 04 · Simulazione ==</h2>
+                <p class="text-gray-400 text-sm md:text-base">Estensione dell'HW3: ogni tentativo di penetrazione riceve ora un punteggio tra 0 e 10 estratto da una distribuzione fissata, con media μ e varianza σ² note. Ogni hacker attacca n sistemi e aggiorna con Welford la propria media campionaria x̄ e varianza campionaria s²; le traiettorie mostrano Mₖ e s²ₖ sistema dopo sistema.</p>
+            </div>
+            <main class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div id="left-col" class="lg:col-span-5 space-y-6 lg:sticky self-start">
+                    <div class="bg-gray-900 rounded-lg p-6 neon-border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-200">Parametri</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="dist" class="block text-sm font-medium text-gray-400 mb-1">Distribuzione dei punteggi</label>
+                                <select id="dist" class="bg-gray-800 border border-gray-700 text-white text-sm rounded px-2 py-2 w-full focus:outline-none focus:border-blue-500"></select>
+                                <p id="dist-desc" class="text-xs text-gray-500 mt-1"></p>
+                            </div>
+                            <div id="chart-dist" class="chart-host"></div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label for="n" class="block text-sm font-medium text-gray-400 mb-1">Sistemi n per hacker</label>
+                                    <select id="n" class="bg-gray-800 border border-gray-700 text-white text-sm rounded px-2 py-2 w-full focus:outline-none focus:border-blue-500 font-mono">
+                                        <option value="100">100</option>
+                                        <option value="1000" selected>1.000</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="m" class="block text-sm font-medium text-gray-400 mb-1">Hacker m</label>
+                                    <select id="m" class="bg-gray-800 border border-gray-700 text-white text-sm rounded px-2 py-2 w-full focus:outline-none focus:border-blue-500 font-mono">
+                                        <option value="500">500</option>
+                                        <option value="1000">1.000</option>
+                                        <option value="2000">2.000</option>
+                                        <option value="5000" selected>5.000</option>
+                                        <option value="10000">10.000</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="seed" class="block text-sm font-medium text-gray-400 mb-1">Seed del generatore (xoshiro128**)</label>
+                                <div class="flex items-center gap-3">
+                                    <input id="seed" type="number" value="2026" min="0" max="4294967295" class="bg-gray-800 border border-gray-700 text-white text-sm rounded px-3 py-2 w-full focus:outline-none focus:border-blue-500 font-mono transition-colors">
+                                    <button type="button" id="btn-seed" class="btn-ghost whitespace-nowrap">NUOVO SEED</button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <button id="btn-start" type="button" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">AVVIA</button>
+                                <button id="btn-instant" type="button" class="btn-ghost">CALCOLO ISTANTANEO</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 rounded-lg p-6 neon-border flex flex-col h-[340px]">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-200">Esecuzione Algoritmo</h2>
+                        <div id="log-2" class="flex-1 bg-black/50 rounded border border-gray-800 p-4 font-mono text-xs md:text-sm overflow-y-auto space-y-2" aria-live="polite"><div class="text-gray-500 italic">In attesa di avvio...</div></div>
+                    </div>
+                </div>
+                <div class="lg:col-span-7 bg-gray-900 rounded-lg p-6 neon-border space-y-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <h2 class="text-xl font-semibold text-gray-200">Traiettorie di Welford (Livello Guru)</h2>
+                        <label class="flex items-center gap-1 text-xs font-mono text-gray-400 cursor-pointer"><input type="checkbox" id="logx" class="accent-blue-500" checked> asse k logaritmico</label>
+                    </div>
+                    <div id="traj-wrap"><canvas id="traj-canvas" aria-label="Media e varianza campionaria correnti degli hacker"></canvas></div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs font-mono text-gray-400">
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500/60 inline-block"></span> Mₖ di ciascun hacker</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-amber-500/70 inline-block"></span> s²ₖ di ciascun hacker</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block shadow-[0_0_5px_#3b82f6]"></span> μ, σ² e bande ±2 deviazioni standard teoriche</div>
+                    </div>
+                    <p class="text-sm text-gray-300 leading-relaxed" id="traj-note"></p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="tiles-dist"></div>
+                </div>
+            </main>
+        </section>
+
+        <section id="confronto" class="bg-gray-900 rounded-lg p-6 lg:p-8 neon-border space-y-6">
+            <h2 class="text-2xl font-bold neon-text-green">== 05 · Media delle stime vs μ e σ² ==</h2>
+            <p class="text-gray-300 leading-relaxed text-sm md:text-base">Per ogni n si calcolano, sugli m hacker, la media delle medie campionarie x̄ⱼ e la media delle varianze campionarie s²ⱼ (divisore n − 1). Per confronto si riporta anche la varianza con divisore n. La colonna z misura lo scarto dal valore teorico in errori standard Monte Carlo: |z| &lt; 2 significa "compatibile".</p>
+            <div class="overflow-x-auto rounded border border-gray-800"><table class="tbl text-sm min-w-[860px]" id="cmp-table"></table></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="space-y-2">
+                    <h3 class="text-sm font-semibold text-gray-200">Media delle medie campionarie</h3>
+                    <div id="chart-avgmean" class="chart-host"></div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-gray-400" id="legend-avgmean"></div>
+                </div>
+                <div class="space-y-2">
+                    <h3 class="text-sm font-semibold text-gray-200">Media delle varianze campionarie: divisore n − 1 vs n</h3>
+                    <div id="chart-avgvar" class="chart-host"></div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-gray-400" id="legend-avgvar"></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="tiles-pooled"></div>
+        </section>
+
+        <section id="variabilita" class="bg-gray-900 rounded-lg p-6 lg:p-8 neon-border space-y-6">
+            <h2 class="text-2xl font-bold neon-text-green">== 06 · Variabilità delle stime al crescere di n ==</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-7 space-y-2">
+                    <h3 class="text-sm font-semibold text-gray-200">Deviazione standard tra hacker delle due stime (scala log-log)</h3>
+                    <div id="chart-sd" class="chart-host"></div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-gray-400" id="legend-sd"></div>
+                </div>
+                <div class="lg:col-span-5 space-y-4 text-sm text-gray-300 leading-relaxed">
+                    <p>Le medie delle stime non dipendono da n, la loro <strong class="text-white">dispersione</strong> sì. Entrambe le deviazioni standard decrescono come 1/√n (pendenza −½ in scala log-log):</p>
+                    <div class="eq">sd(x̄) = σ/√n</div>
+                    <div class="eq">Var(s²) = μ₄/n − σ⁴(n − 3)/(n(n − 1))</div>
+                    <p>dove μ₄ = E[(X − μ)⁴]. La varianza si stima con più fatica della media, e quanto dipende dalla <strong class="text-white">curtosi</strong> κ = μ₄/σ⁴: per n grande sd(s²)/σ² ≈ √((κ − 1)/n). Con punteggi "rari ma critici" (κ ≈ 8) servono molti più sistemi che con l'uniforme (κ = 1,8).</p>
+                    <div class="grid grid-cols-2 gap-3" id="tiles-sd"></div>
+                </div>
+            </div>
+            <div class="space-y-3 border-t border-gray-800 pt-6">
+                <h3 class="text-lg font-semibold text-white">Distribuzione delle stime tra gli m hacker</h3>
+                <p class="text-sm text-gray-300">Asse orizzontale condiviso per riga: le distribuzioni restano centrate su μ e σ² e si stringono. La linea chiara è l'approssimazione normale N(μ, σ²/n) e N(σ², Var(s²)); per n piccolo la distribuzione di s² è asimmetrica e la normale non basta.</p>
+                <div id="small-multiples" class="space-y-6"></div>
+            </div>
+        </section>
+
+        <section id="conclusioni" class="bg-gray-900 rounded-lg p-6 lg:p-8 neon-border space-y-6">
+            <h2 class="text-2xl font-bold neon-text-green">== 07 · Conclusioni e uso in statistica inferenziale ==</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm text-gray-300 leading-relaxed">
+                <div class="space-y-3">
+                    <h3 class="text-lg font-semibold text-white">Cosa mostrano i confronti</h3>
+                    <ol class="space-y-3">
+                        <li class="flex gap-3"><span class="step-n">1</span><span><strong class="text-white">Stimatori corretti.</strong> La media delle x̄ⱼ coincide con μ e la media delle s²ⱼ coincide con σ², per ogni n, entro l'errore Monte Carlo: E[x̄] = μ ed E[s²] = σ². Una singola stima sbaglia, ma non sbaglia <em>sistematicamente</em> in una direzione.</span></li>
+                        <li class="flex gap-3"><span class="step-n">2</span><span><strong class="text-white">Perché n − 1.</strong> E[Sₙ] = Σ E[(xᵢ − μ)²] − n·E[(x̄ − μ)²] = nσ² − σ² = (n − 1)σ²: un grado di libertà è "speso" per stimare μ. Dividendo per n si ottiene (n − 1)σ²/n, che sottostima σ² del 50% con n = 2 e del 10% con n = 10 (correzione di Bessel).</span></li>
+                        <li class="flex gap-3"><span class="step-n">3</span><span><strong class="text-white">Consistenza.</strong> Var(x̄) e Var(s²) tendono a 0 come 1/n: aumentando i sistemi attaccati da ciascun hacker, la stima del singolo hacker si concentra sul valore vero (Legge dei Grandi Numeri), e per il TLC la sua distribuzione diventa normale.</span></li>
+                        <li class="flex gap-3"><span class="step-n">4</span><span><strong class="text-white">Effetto di m.</strong> m non cambia la precisione del singolo hacker; riduce l'errore della media delle stime (≈ sd/√m) ed è ciò che permette di verificare empiricamente la correttezza.</span></li>
+                    </ol>
+                </div>
+                <div class="space-y-3">
+                    <h3 class="text-lg font-semibold text-white">Perché è utile in statistica inferenziale</h3>
+                    <p>Nella realtà μ e σ² sono <strong class="text-white">ignoti</strong> e si osserva un solo campione: i punteggi di un hacker, di un gruppo, di una campagna. Correttezza e consistenza garantiscono che x̄ e s² calcolati da quel campione siano buone stime dei parametri, e la teoria della loro variabilità dice <em>quanto</em> fidarsi:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>errore standard della media s/√n e intervallo di confidenza x̄ ± t<sub>n−1; 0,975</sub>·s/√n;</li>
+                        <li>test d'ipotesi: confrontare due difese o due gruppi di attaccanti tramite differenze di medie rapportate al loro errore standard;</li>
+                        <li>pianificazione: scegliere n (quanti sistemi osservare) per ottenere la precisione voluta;</li>
+                        <li>calcolo in tempo reale: grazie a Welford le stime si aggiornano a ogni nuovo evento, con memoria costante.</li>
+                    </ul>
+                    <p>Il grafico qui sotto verifica la prima affermazione: per ogni n, la frazione di hacker il cui intervallo al 95% contiene davvero μ.</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-7 space-y-2">
+                    <h3 class="text-sm font-semibold text-gray-200">Copertura dell'intervallo x̄ ± t·s/√n (livello nominale 95%)</h3>
+                    <div id="chart-cov" class="chart-host"></div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-gray-400" id="legend-cov"></div>
+                </div>
+                <div class="lg:col-span-5 space-y-3 text-sm text-gray-300 leading-relaxed">
+                    <p id="cov-note"></p>
+                    <p>Lettura di sicurezza: con punteggi molto asimmetrici, come gli attacchi "rari ma critici", pochi sistemi osservati possono non contenere nessuna compromissione: s² = 0 e l'intervallo collassa su 0, dando una falsa sicurezza. È lo stesso fenomeno della sezione 06: la curtosi decide quanti sistemi servono prima che l'inferenza sia affidabile.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="selftest" class="bg-gray-900 rounded-lg p-6 lg:p-8 neon-border space-y-4">
+            <h2 class="text-2xl font-bold neon-text-green">== 08 · Self-test ==</h2>
+            <p class="text-gray-300 leading-relaxed text-sm md:text-base">All'apertura della pagina l'implementazione viene confrontata con riferimenti indipendenti: numpy (media e varianza con ddof = 1), scipy (momenti delle quattro distribuzioni, quantili t), una simulazione numpy di 400.000 campioni per la formula di Var(s²), l'implementazione C di riferimento di xoshiro128** e l'aritmetica intera esatta. La simulazione corrente viene confrontata con μ e σ² entro gli intervalli di confidenza.</p>
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" id="btn-selftest" class="btn-ghost">RIESEGUI SELF-TEST</button>
+                <span id="selftest-summary" class="font-mono text-sm"></span>
+            </div>
+            <div id="selftest-log" class="bg-black/50 rounded border border-gray-800 p-4 font-mono text-xs md:text-sm max-h-[360px] overflow-y-auto space-y-1"></div>
+        </section>
+
+        <footer class="border-t border-gray-800 pt-6 pb-10 text-xs text-gray-500 space-y-3">
+            <p class="font-mono">Riferimenti</p>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
+                <li>B. P. Welford (1962), "Note on a method for calculating corrected sums of squares and products", <em>Technometrics</em> 4(3)</li>
+                <li>D. E. Knuth, <em>The Art of Computer Programming</em>, vol. 2, §4.2.2 (ricorrenze per media e SS)</li>
+                <li>T. F. Chan, G. H. Golub, R. J. LeVeque (1983), "Algorithms for computing the sample variance", <em>The American Statistician</em> 37(3)</li>
+                <li>N. J. Higham, <em>Accuracy and Stability of Numerical Algorithms</em>, 2ª ed., §1.9 (varianza campionaria)</li>
+                <li>G. Casella, R. L. Berger, <em>Statistical Inference</em>, cap. 5 (proprietà di x̄ e s²)</li>
+                <li>D. Blackman, S. Vigna (2021), "Scrambled linear pseudorandom number generators", <em>ACM TOMS</em> 47</li>
+            </ul>
+            <p>HMWK 4 · Cybersecurity · Algoritmi, simulazione e grafici in JavaScript puro, verificati con numpy/scipy.</p>
+        </footer>
+    </div>
+
+    <div id="chart-tip" class="hidden" role="tooltip"></div>
+
+<script>
+/* =====================================================================
+ *  HMWK 4 — WelfordCore
+ *  Formule ricorsive di Knuth/Welford, fusione di Chan, confronto di
+ *  stabilità numerica, distribuzioni dei punteggi 0–10 e simulazione di
+ *  m hacker × n sistemi. JavaScript puro, nessuna libreria esterna.
+ * ===================================================================== */
+const WelfordCore = (() => {
+  'use strict';
+
+  /* ------------------------- Welford (Es. 1) ------------------------- */
+  // Accumulatore: k = numero di dati, mean = M_k, ss = S_k = Σ (x_i − M_k)²
+  const newAcc = () => ({ k: 0, mean: 0, ss: 0 });
+  function update(a, x) {
+    a.k += 1;
+    const d = x - a.mean;      // δ_k = x_k − M_{k−1}
+    a.mean += d / a.k;         // M_k = M_{k−1} + δ_k / k          (Knuth)
+    a.ss += d * (x - a.mean);  // S_k = S_{k−1} + δ_k (x_k − M_k)  (Welford)
+    return a;
+  }
+  const variance = (a) => (a.k > 1 ? a.ss / (a.k - 1) : NaN);   // varianza campionaria s²
+  const popVariance = (a) => (a.k > 0 ? a.ss / a.k : NaN);      // varianza "di popolazione" σ̂²
+  // fusione di due accumulatori (Chan, Golub, LeVeque 1979): permette di unire hacker diversi
+  function merge(a, b) {
+    if (!a.k) return { ...b };
+    if (!b.k) return { ...a };
+    const k = a.k + b.k, d = b.mean - a.mean;
+    return { k, mean: a.mean + (d * b.k) / k, ss: a.ss + b.ss + (d * d * a.k * b.k) / k };
+  }
+  // passo-passo con tutti i valori intermedi (per la tabella dell'Es. 1)
+  function trace(xs) {
+    const a = newAcc(), out = [];
+    for (const x of xs) {
+      const prevMean = a.mean, prevSS = a.ss;
+      update(a, x);
+      out.push({ k: a.k, x, d: x - prevMean, prevMean, mean: a.mean, prevSS, ss: a.ss, s2: variance(a), pop: popVariance(a) });
+    }
+    return out;
+  }
+
+  /* ---------------- stabilità: tre algoritmi, due precisioni ---------------- */
+  const id = (v) => v, f32 = Math.fround;
+  function naive(xs, R = id) {     // "da manuale": (Σx² − (Σx)²/n)/(n − 1)
+    let s = R(0), q = R(0);
+    for (const x0 of xs) { const x = R(x0); s = R(s + x); q = R(q + R(x * x)); }
+    const n = xs.length;
+    return R(R(q - R(R(s * s) / n)) / (n - 1));
+  }
+  function twoPass(xs, R = id) {   // prima la media, poi Σ(x − x̄)²
+    let s = R(0);
+    for (const x0 of xs) s = R(s + R(x0));
+    const mean = R(s / xs.length);
+    let q = R(0);
+    for (const x0 of xs) { const d = R(R(x0) - mean); q = R(q + R(d * d)); }
+    return R(q / (xs.length - 1));
+  }
+  function welford(xs, R = id) {   // le stesse 3 righe, con arrotondamento R a ogni operazione
+    let mean = R(0), ss = R(0), k = 0;
+    for (const x0 of xs) {
+      const x = R(x0); k++;
+      const d = R(x - mean);
+      mean = R(mean + R(d / k));
+      ss = R(ss + R(d * R(x - mean)));
+    }
+    return R(ss / (k - 1));
+  }
+  // varianza esatta di dati interi (BigInt) restituita come numero
+  function exactVarianceInt(xs) {
+    const n = BigInt(xs.length);
+    let s = 0n, q = 0n;
+    for (const x of xs) { const b = BigInt(x); s += b; q += b * b; }
+    const num = n * q - s * s, den = n * (n - 1n);
+    const ip = num / den, rem = num % den;
+    return Number(ip) + Number(rem) / Number(den);
+  }
+
+  /* --------------------------- PRNG (HW3) --------------------------- */
+  function splitmix32(seed) {
+    let a = seed | 0;
+    return () => {
+      a = (a + 0x9e3779b9) | 0;
+      let t = a ^ (a >>> 16);
+      t = Math.imul(t, 0x21f0aaad); t = t ^ (t >>> 15);
+      t = Math.imul(t, 0x735a2d97);
+      return (t ^ (t >>> 15)) >>> 0;
+    };
+  }
+  const rotl = (x, k) => (x << k) | (x >>> (32 - k));
+  function xoshiroNext(s) {
+    const r = Math.imul(rotl(Math.imul(s[1], 5), 7), 9) >>> 0;
+    const t = s[1] << 9;
+    s[2] ^= s[0]; s[3] ^= s[1]; s[1] ^= s[2]; s[0] ^= s[3]; s[2] ^= t;
+    s[3] = rotl(s[3], 11);
+    return r;
+  }
+  function makeRng(seed, stream = 0) {
+    const sm = splitmix32((seed ^ Math.imul(stream + 1, 0x632be5ab)) | 0);
+    const s = new Uint32Array([sm(), sm(), sm(), sm()]);
+    if (!(s[0] | s[1] | s[2] | s[3])) s[0] = 1;
+    return { next: () => xoshiroNext(s), u: () => xoshiroNext(s) / 4294967296, state: s };
+  }
+
+  /* ---------------- distribuzioni dei punteggi in [0, 10] ---------------- */
+  // momenti grezzi E[X^r], r = 1..4, calcolati esattamente
+  function binomPmf(n, p) {
+    const out = [];
+    let c = 1;
+    for (let k = 0; k <= n; k++) { out.push(c * Math.pow(p, k) * Math.pow(1 - p, n - k)); c = (c * (n - k)) / (k + 1); }
+    return out;
+  }
+  const BINOM = binomPmf(10, 0.3), BINOM_CDF = [];
+  BINOM.reduce((acc, v, i) => (BINOM_CDF[i] = acc + v), 0);
+  const DISTS = {
+    beta: {
+      label: '10 · Beta(2, 5)', short: 'Beta', kind: 'continua',
+      desc: 'Punteggio continuo e asimmetrico: la maggior parte dei tentativi ottiene un successo parziale basso, pochi arrivano vicino a 10.',
+      // Beta(2,5) = secondo minimo di 6 uniformi (statistica d'ordine)
+      sample: (r) => { let a = 2, b = 2; for (let i = 0; i < 6; i++) { const u = r.u(); if (u < a) { b = a; a = u; } else if (u < b) b = u; } return 10 * b; },
+      raw: [1, 2, 3, 4].map((q) => { let v = Math.pow(10, q); for (let i = 0; i < q; i++) v *= (2 + i) / (7 + i); return v; }),
+      pdf: (x) => (x <= 0 || x >= 10 ? 0 : (30 * (x / 10) * Math.pow(1 - x / 10, 4)) / 10),
+    },
+    unif: {
+      label: 'Uniforme continua U(0, 10)', short: 'Uniforme', kind: 'continua',
+      desc: 'Ogni punteggio tra 0 e 10 è ugualmente probabile: distribuzione simmetrica, a code leggere (curtosi bassa).',
+      sample: (r) => 10 * r.u(),
+      raw: [1, 2, 3, 4].map((q) => Math.pow(10, q) / (q + 1)),
+      pdf: (x) => (x < 0 || x > 10 ? 0 : 0.1),
+    },
+    binom: {
+      label: 'Binomiale(10; 0,3) intera', short: 'Binomiale', kind: 'discreta',
+      desc: 'Punteggio intero = numero di controlli superati su 10, ciascuno con probabilità 0,3: è la somma di 10 tentativi Bernoulli dell\'HW3.',
+      sample: (r) => { const u = r.u(); let k = 0; while (k < 10 && u >= BINOM_CDF[k]) k++; return k; },
+      raw: [1, 2, 3, 4].map((q) => BINOM.reduce((a, p, k) => a + p * Math.pow(k, q), 0)),
+      pmf: BINOM.map((p, k) => [k, p]),
+    },
+    bern: {
+      label: '10 · Bernoulli(0,1): rari ma critici', short: 'Rari ma critici', kind: 'discreta',
+      desc: 'Il 90% dei tentativi vale 0, il 10% vale 10 (compromissione completa): estensione diretta dell\'HW3, a coda pesante (curtosi alta).',
+      sample: (r) => (r.u() < 0.1 ? 10 : 0),
+      raw: [1, 2, 3, 4].map((q) => 0.1 * Math.pow(10, q)),
+      pmf: [[0, 0.9], [10, 0.1]],
+    },
+  };
+  // momenti centrali da quelli grezzi
+  function moments(key) {
+    const [m1, m2, m3, m4] = DISTS[key].raw;
+    const mu = m1, s2 = m2 - m1 * m1;
+    const mu3 = m3 - 3 * mu * m2 + 2 * mu ** 3;
+    const mu4 = m4 - 4 * mu * m3 + 6 * mu * mu * m2 - 3 * mu ** 4;
+    return { mu, s2, sd: Math.sqrt(s2), mu3, mu4, skew: mu3 / Math.pow(s2, 1.5), exkurt: mu4 / (s2 * s2) - 3 };
+  }
+  // teoria delle stime con n dati i.i.d.
+  function theory(key, n) {
+    const { mu, s2, mu4 } = moments(key);
+    const varS2 = mu4 / n - (s2 * s2 * (n - 3)) / (n * (n - 1)); // Var(s²), s² con divisore n − 1
+    return { mu, s2, sdMean: Math.sqrt(s2 / n), varS2, sdS2: Math.sqrt(Math.max(0, varS2)), biased: ((n - 1) / n) * s2 };
+  }
+
+  /* ---------------------- simulazione (Es. 2) ---------------------- */
+  const CP_ALL = [2, 3, 5, 10, 20, 50, 100, 200, 500, 1000];
+  const checkpoints = (n) => CP_ALL.filter((c) => c <= n);
+  async function simulate({ dist, n, m, seed, nPaths = 60, pathPts = 400, onProgress = null }) {
+    const t0 = (globalThis.performance || Date).now();
+    const D = DISTS[dist], rng = makeRng(seed, Object.keys(DISTS).indexOf(dist));
+    const cps = checkpoints(n), C = cps.length;
+    // griglia dei percorsi: tutti i k piccoli + punti geometrici (scala log) + punti lineari
+    const gs = new Set();
+    for (let k = 1; k <= Math.min(n, 30); k++) gs.add(k);
+    const half = Math.floor(pathPts / 2);
+    for (let i = 0; i <= half; i++) { gs.add(Math.max(1, Math.min(n, Math.round(Math.pow(n, i / half))))); gs.add(Math.max(1, Math.round(1 + (i * (n - 1)) / half))); }
+    const grid = Int32Array.from([...gs].sort((a, b) => a - b)), P = grid.length;
+    const np = Math.min(nPaths, m);
+    const MEAN = new Float64Array(m * C), VAR = new Float64Array(m * C);
+    const PM = new Float64Array(np * P), PV = new Float64Array(np * P);
+    const per = Math.max(1, Math.floor(400000 / n));
+    for (let j0 = 0; j0 < m; j0 += per) {
+      const j1 = Math.min(m, j0 + per);
+      for (let j = j0; j < j1; j++) {
+        let mean = 0, ss = 0, ci = 0, gi = 0;
+        const rec = j < np;
+        for (let k = 1; k <= n; k++) {
+          const x = D.sample(rng);
+          // ---- Welford: le 3 righe dell'Es. 1 ----
+          const d = x - mean;
+          mean += d / k;
+          ss += d * (x - mean);
+          // -----------------------------------------
+          if (k === cps[ci]) { MEAN[j * C + ci] = mean; VAR[j * C + ci] = ss / (k - 1); ci++; }
+          if (rec && k === grid[gi]) { PM[j * P + gi] = mean; PV[j * P + gi] = k > 1 ? ss / (k - 1) : NaN; gi++; }
+        }
+      }
+      if (onProgress) await onProgress(j1, m);
+    }
+    return { dist, n, m, seed, cps, C, grid, P, nPaths: np, MEAN, VAR, PM, PV, ms: (globalThis.performance || Date).now() - t0 };
+  }
+  // statistiche "tra hacker" al checkpoint ci
+  function acrossHackers(sim, ci) {
+    const n = sim.cps[ci], am = newAcc(), av = newAcc(), ab = newAcc();
+    let pooled = newAcc();
+    for (let j = 0; j < sim.m; j++) {
+      const mj = sim.MEAN[j * sim.C + ci], vj = sim.VAR[j * sim.C + ci];
+      update(am, mj); update(av, vj); update(ab, (vj * (n - 1)) / n);
+      pooled = merge(pooled, { k: n, mean: mj, ss: vj * (n - 1) });   // Chan: tutti gli m·n punteggi
+    }
+    return {
+      n, avgMean: am.mean, sdMean: Math.sqrt(variance(am)), avgVar: av.mean, sdVar: Math.sqrt(variance(av)),
+      avgBiased: ab.mean, pooledMean: pooled.mean, pooledVar: variance(pooled),
+    };
+  }
+  // copertura dell'intervallo di confidenza al 95% x̄ ± t·s/√n
+  function coverage(sim, ci, mu, t) {
+    const n = sim.cps[ci];
+    let c = 0;
+    for (let j = 0; j < sim.m; j++) {
+      const h = (t * Math.sqrt(sim.VAR[j * sim.C + ci])) / Math.sqrt(n);
+      if (Math.abs(sim.MEAN[j * sim.C + ci] - mu) <= h) c++;
+    }
+    return c / sim.m;
+  }
+  // quantili t di Student 0,975 per df = n − 1 ai checkpoint (calcolati con scipy)
+  const T975 = { 1: 12.706204736174694, 2: 4.302652729749462, 4: 2.7764451051977934, 9: 2.262157162798205, 19: 2.0930240544083087,
+    49: 2.0095752371292392, 99: 1.9842169515864174, 199: 1.9719565442517533, 499: 1.9647293909876886, 999: 1.9623414611334493 };
+
+  return { newAcc, update, variance, popVariance, merge, trace, naive, twoPass, welford, f32, exactVarianceInt,
+    splitmix32, xoshiroNext, makeRng, DISTS, moments, theory, CP_ALL, checkpoints, simulate, acrossHackers, coverage, T975 };
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = WelfordCore;
+</script>
+<script>
+// Valori di riferimento indipendenti: scipy, implementazione C di xoshiro128**, numpy (Welford, simulazione Monte Carlo di Var(s²))
+const REF = {"moments":{"beta":{"mu":2.8571428571428568,"s2":2.5510204081632653,"mu4":18.74219075385256},"unif":{"mu":5.0,"s2":8.333333333333332,"mu4":125.00000000000003},"binom":{"mu":3.0,"s2":2.1,"mu4":12.683999999999989},"bern":{"mu":1.0,"s2":9.0,"mu4":657.0}},"welford_data":[[40.03322474481758,58.84609920690377],[43.9053678342864,48.18578735545922,49.47259685092635],[44.81380743540073,40.42545108751939,54.54224961535128,52.527406791384266,36.32995855891467,66.43186758065197,56.779478340263466,44.68428973702845,56.315387919485765,46.73132778675615,49.5751733688408,55.52191041163441,41.203323068022264,54.0310026007715,59.79285296306603,59.256086425129496,47.90211039290626],[56.320435389975415,38.64892086072456,48.8926751752619,53.14638752474673,40.59479249259523,49.428186865122164,62.07317952621431,68.32711598457487,55.44152940667538,55.800432368971386,43.28708180887392,41.53428199117979,40.11395590568117,53.79082780933537,55.263575768903806,45.38867776302783,41.39927510048307,51.802904378890105,52.190320429042906,49.08431816843592,58.88988184327553,49.34926279586701,49.536943776988366,42.2424987303485,50.95169795385367,59.429544350080874,50.428008146832056,50.496402201992964,53.03558175937008,51.94238561909631,53.711766706480844,53.757046783830866,54.3284501036058,44.43487780697331,52.10021662400632,38.78108885485388,51.86759180820377,41.16863352795035,49.501104356657535,53.31834811175032,47.096023672500685,50.68401550010462,38.517075141098886,43.99918823280849,54.817972516959294,41.91829291728469,54.55316672363691,40.28148033124179,43.64832279839709,42.33202284872936,50.0500198645803,53.74051932068995,42.53934507363584,48.729690818498874,61.353662589576125,47.77825638037245,44.289295231784514,52.706053121433214,48.43452751835994,45.088164339048475,37.43000776760597,55.72827935064247,46.00276968744487,50.00549867543811,42.55450098178978,59.11200150048702,55.23511059498382,56.8661313643618,49.227069183119326,53.27542971443589,56.23425004786368,57.16106555947984,52.18668372591478,49.566667200350565,47.483642468911754,44.75949210990783,43.24164764767567,52.5202426016594,48.28813227416925,36.02900372241916,48.91326668214691,57.446816122670626,48.07379902862254,37.02664848894453,49.12960650506168,55.49482165616698,51.413990177229216,47.003478900412766,62.938022269438974,63.299670248283924,49.31102475653803,55.69411807854694,52.7474607198625,55.470100303232044,60.172900621197726,55.74130231733881,50.61393741194595,45.42546046248535,44.316791845055135,49.821232793202356,58.10729180238808,52.10364608791564,50.371396522722904,51.8009006666878,50.25020003682003,53.8306568012614,42.1392689443965,36.173266324893156,47.02394965260888,41.95648325286673,61.30596637929967,48.89066197840503,48.22988658272552,39.232921758483684,51.974602230021496,45.6347150600501,57.85275584267207,55.8885472171028,44.568727296176924,52.875015081193645,30.943087269677964,45.28686640858281,58.7235507041277,55.5314561974133,51.22738621924222,49.794937788482564,40.0634001985392,40.48023573182559,51.563880910067354,62.33245602257115,34.803771073053866,54.39941719757262,54.2083756820128,56.65530500636845,43.915273330711535,46.296950503599426,50.31978866889204,42.807137321122084,41.39497491020615,43.81649069669827,49.503745754136986,52.61837345601204,49.82784383147255,50.54082460841141,45.21260747412402,44.95413632531425,57.844359705296874,49.61630087812313,49.42310393075407,56.55190550553643,58.669759874730914,58.9095686782716,52.8412455225953,49.64772345009675,52.02522277225804,51.255139737448026,59.78236389267582,52.04432754218484,54.46883972047164,49.804786007962385,59.59736294883801,35.630346596212085,52.663563548746886,55.287734685222205,41.88611904579118,65.05217080472366,48.94810846966874,48.87185004163754,42.44390267307164,56.145763291247285,51.57127189709398,45.85884582546591,51.58383961529963,54.803277548949374,58.50503225641732,51.512416089950555,43.246235099143846,46.103745367417815,33.91128651870862,44.875425117268854,55.15528370310892,53.26001702956863,49.244867658417306,47.60994594055985,61.091736554292666,51.975688443246476,56.366824735501,52.76550096295642,45.314364365347764,60.8875828641008,41.33302678117782,41.6267857721509,46.99595345915285,44.89238074729678,46.097717706168886,45.800328550164096,56.907790430741414,50.379362725914895,52.463352099128315,38.8842134383454,44.07134055445965,57.591991836908385,41.57321348328221,58.24971625821042,42.78533902209263,52.09452829603242,44.07632020204809,51.37634210328569,43.70253522683501,48.20376199892985,61.70783436026623,47.373112476582776,64.2575634629994,46.78844621576787,41.76961238353837,50.525367491617885,47.137068494746124,62.295723880810705,56.026461480122684,58.26891787963881,54.42169119881012,67.2969797775369,55.560117616530576,53.71947014661846,44.19420981954283,43.63487316021469,51.28965153498191,56.984167228141835,57.81871328466319,43.39199620984818,53.71984692777127,51.35342197850923,42.17215491740068,53.582919072461394,34.10603597659489,51.8421448219229,67.2991944557164,42.86080358871163,50.131268304781436,36.74015043475612,44.7149884095265,55.293384177083965,42.70276595939902,49.760192999292045,47.51382190612251,47.3510014245147,51.33454081939235,53.39077405738006,58.61187428117469,55.8307943601923,46.04540773706168,59.902872092782744,58.737968520262,39.08736330583196,54.65662814537569,55.77916620263982,56.764231828527954,53.830227092220746,40.919717146196554,48.126559667585305,35.50855410472113,48.89475212507597,64.20259836853685,54.77099619502578,55.85342507747656,46.40558367363362,42.889843760381254,42.50810369686395,50.86738860320569,44.37888882363377,45.536549772361674,58.01146947782544,38.51368660101593,40.80197493597849,46.42753243187952,49.300973812436915,49.09345265317805,40.22306458967986,51.3566654564807,49.094950902613476,52.48135366011701,42.4198915444731,51.71457464334483,51.54574553638793,45.376972608703696,48.470253945089624,46.10800691342401,59.494667081735784,28.16273961748616,39.86629811915272,38.05950223838565,47.35316054076294,45.250542588521654,47.12127845874425,55.03308850578354,38.57236366126669,44.08014458294974,48.43829959064282,41.584471762357225,52.58991378205705,52.30998150467469,45.02687372467061,37.6022498640891,61.20585093077041,53.29768645725289,52.966254375801675,50.50582336995933,49.94857123363057,55.81752971040764,49.89076132561423,45.583655631212686,54.9665096937772,50.41786619528627,44.592669768120274,43.65632634462509,58.15835497505912,54.41733181504701,63.82863005822227,46.31341362535898,44.79521589378009,52.8272339999096,59.655847973513374,54.17726681008671,53.03207150647289,63.20891645962496,44.7962634275185,41.26435686008074,44.787671784585456,47.78200107921857,52.613459198336905,57.15372246321614,52.83926805980081,60.66319624849835,44.207443102361786,63.33846822731078,44.31584814775707,58.19515365704857,43.43509923339667,52.402869046746346,50.356288871202416,53.62291751812509,55.25997334838752,48.507605801638384,49.53223425685614,51.67378202823629,40.8649429922544,44.88134492152636,38.629152107196006,50.03675356730537,65.55509872492581,55.189164565659226,43.94199205290792,45.046207129004564,56.831291345748525,46.679134321399076,38.74062582309116,42.83959113393195,42.62020502884123,42.850209015367255,54.73165573881582,50.49492010316504,39.57952382602829,46.22142105085873,42.03175282922922,41.541056342422756,39.45327558704672,62.23013426787388,47.84869335488376,54.03361408932577,56.08120574596047,47.310098338735,53.74443677496372,53.784311153752704,51.55719564649054,65.18672490414627,51.987496713933766,48.400566404973425,54.52315135721394,62.44574477916988,56.96015600181644,46.65190075570341,43.98864797951262,43.48404800025051,45.366704510606944,52.705506318089,55.92191804581279,34.11036488484905,49.86932284213116,42.26486782126317,54.780298122080424,56.40162944781157,44.551535194523595,46.854037572001005,43.33866958801217,52.737549743948094,38.7302673045711,42.120973284780646,45.20763314176838,58.5856326912288,66.81730960427821,50.139708933020636,41.379001284982245,50.51930527959492,43.9166528501248,53.21873697375709,42.20406844886377,47.413588548493465,49.901261304876456,53.6396065857199,49.461780546860155,58.86122008742907,50.869629330902846,37.30329560487713,56.46841321583894,47.96220615901808,45.311664309206016,60.5537927734729,43.04475668081239,50.50867205976543,45.00917861208458,59.46700253341628,47.45187900047869,51.649896343798154,40.25400747474353,60.043137912353345,42.51335703509817,56.37321526216287,57.795939147415275,58.62620764964236,62.698789653327104,41.80483386180578,52.813875246713536,50.965787546325586,52.939408450890085,57.688236769226606,50.765532377826766,44.28156551535761,49.319229222806,60.77465503674776,41.747087721508066,50.55778972324886,43.13089534056892,57.761455850032625,38.46085965606031,47.61239471958639,49.13063524068757,50.81841017648419,66.52853089890417,60.88618146140869,42.790984165408496,65.11583117349218,41.65226601892956,36.90376647880302,39.51062563502614,51.42415329424094,53.74402410368704,34.522398892002705,53.051819337511084,48.130634817406865,54.94472672580093,47.30775229702107,56.30057197862456,53.95041590779343,41.79148504434618,60.11914396817271,51.48698989863858,55.11034174382385,58.83240355094298,43.17669167389049,49.40683952559142,44.24811421878759,43.403390874568444,51.86185682317319,52.37853775268968,59.31982445531703,59.69878449304415,49.85049187589536,44.14054691980575,72.4048259139698,65.03517706087882,49.25334659644769,43.488915393451066,47.03427941830721,51.96672732069084,57.92085853431782,56.78568262453875,53.04790643190992,48.27011987982901,51.177296438476354,47.82562825375413,50.49653518239718,49.27639387686016,53.677276939165026,36.82126065147804,47.580253942708126,47.96083561085036,42.085531610946994,48.79092727237795,42.625203662015586,45.34812800455884,47.972226013818606,48.22779763808189,45.98351789535526,57.72432234211996,51.4081556056503,52.25645996738185,51.631649304517666,45.323543353557014,43.81746691150994,55.877477834423516,47.52845471983898,37.60203769049582,34.60849028026388,51.55232128858777,44.84045954753555,49.526913026556876,46.16922088177626,47.14809758153612,48.79083665950189,41.26814845206161,49.86866306507086,56.90286510570713,54.86971991220087,37.8226275960733,40.608547417089554,40.670215315388134,48.263518276885485,55.983843548532924,52.260890380125176,37.72450015656062,50.38419873820803,55.65188113714072,46.856902154810626,63.32925784063677,45.43972186736647,58.207376184804744,66.4585881402094,41.06503482788625,47.7341936538215,54.022873431446506,72.47992353126291,37.4807411964166,53.96235157910213,51.993574434064136,47.04336712078435,44.15603292611557,46.318586708318904,47.87862427987126,41.1109835197826,61.02839568557708,42.240849321426936,47.00736450336487,45.36963242777048,47.10722246015704,50.65084548695166,44.696820531761304,48.3470906191404,62.07122300495877,57.39340242630547,47.98379700852287,56.350243212268545,44.620541522798526,51.581518678606265,40.000202650111866,41.99116932032885,43.934105278810705,58.66275012797591,51.61483955862138,53.834341240625804,51.06157049209479,52.56830029969387,52.93635243345659,55.35724832097251,51.12879675613742,43.58775624092441,44.46356704675904,58.499211799732365,59.88262404610632,53.9155510032189,38.48570899764063,61.0261940578262,52.26054920096607,49.478345973971514,50.137584189377584,47.39121448537485,62.30841092035045,61.77841467692286,42.54627479587333,48.67142723471335,52.12382409946842,58.930120615532054,32.99278844223011,56.51427010719725,61.67487017249252,47.66136977472968,49.63942569542408,58.70280809346944,52.56925501000725,40.57669368489009,41.72682423825115,42.68496633609624,39.97342907906366,49.859379641109136,46.260833168318314,50.1881281729993,54.84912625996717,62.422075693257455,51.41498778771928,36.83407132562919,59.651498737853885,49.06447034646045,58.06198210347642,46.73502456513122,52.01995072739733,48.94190154481627,49.70528221174238,58.83483402077776,45.29107921392334,51.032832288256024,51.42671500469258,47.15646807785054,34.44619380680991,52.322681594769776,29.976167045152252,39.33585393846746,46.65420777956597,52.88860061850109,55.92475029832863,55.6847132660096,54.0642232931269,47.332488161940525,58.40696019606742,48.01359054603818,57.74973323418196,34.2072932451054,43.19701505000327,45.84966267528023,49.87331057853634,33.11075761297957,55.59458396219366,56.83291484502745,55.41164483520214,46.26748316970997,60.09043101611879,46.052129269424164,56.25429579196113,49.480241123972434,49.757751094933354,48.804287777927634,49.74413807464981,57.68645933684047,59.98406385810328,59.90275882815485,56.26106748776001,54.575694899328035,53.06006539959262,62.22450692663205,46.800328289755356,45.45483823965236,50.23074182472127,38.204709811102916,48.23181220637418,49.48178087633433,42.69039400338621,45.85056235790872,54.76119472008912,48.2781876489591,50.42393735356538,57.138065043141,45.589646180935965,41.8773569094643,49.601876471202985,52.86489505492487,37.19227709263148,54.4936789938523,47.69235202640184,46.99473187431837,43.86185012756703,48.60276146057356,56.65189644022787,53.597109250976516,55.58464227392417,47.35309452220967,61.075623075067085,58.85960231836512,49.7919193273701,31.521684304395713,50.35798625619562,69.23438598294842,49.55106158250871,42.78841847578552,61.893709525978295,45.634154969923216,53.412366307933006,55.31302582076289,39.642294407585126,50.84836553116089,58.320407407319834,47.665923943312656,54.54363866571141,49.81217589409758,57.175331659517546,62.93757530502967,42.27880112582312,47.967278480813725,52.7409767036287,45.553743583621575,44.18967764313277,47.55163541553504,48.08869828568184,45.39439224140621,52.28810041813061,55.64534254492701,55.21691282285588,54.75549580629216,58.347541783567046,40.43220460023512,49.18372862462057,51.32314167852928,53.68039945622903,38.6872296422227,63.16505444904981,43.76573161989889,51.848455472532955,55.16114418486015,57.60786130650345,45.195019661546176,46.20733046312531,52.598398569434565,54.112213810370974,56.385398931792444,49.60921601613913,45.14305295097122,40.6571400703683,62.22506656833197,40.386397515530604,54.908468107528726,51.960460872233995,55.35071158958285,56.695587748326176,59.46821594801787,49.609627029028296,52.80089833410912,36.340072134858886,50.341358208076656,43.66880423388623,48.948137118653925,58.68998971991386,50.77498215337517,57.66630670427841,48.623103241808444,52.831205158801865,47.13702441616201,32.21055989480179,45.03675814485114,48.16890884924688,51.13842314660494,50.05606636565299,49.15505591027791,56.679664477210764,54.42108135658058,47.25945001521185,56.1497990559649,36.14310490537178,48.069593836310496,49.018067027127614,59.17493361434757,46.300495444266694,39.75312430943327,51.29958481093706,61.917701927174626,48.60318938229156,49.37800294259319,48.63773989503339,50.43910970534354,59.200175587804516,63.82732556057516,53.38278717447264,49.357285869280794,63.06409752122789,50.78698817861304,50.55730902823977,47.593531888540994,47.89169562957791,51.787835738698476,48.091272093210286,53.0320699892694,50.75017584958638,53.99911041376026,47.43932199774613,48.711321117095466,51.81744274073722,50.59131776842069,50.81357529013796,58.303282888660014,42.60877939827628,36.522766223301616,55.18744796312298,48.42066093069539,59.558998043559335,49.51582346342736,41.92902735381425,65.46771281508099,52.91532110410198,46.945409542067836,44.847972800284055,54.042056490820706,45.3695506603121,52.83321763781425,58.252464069231436,40.37774021165285,47.60411500188895,53.45233558425756,61.7193594093223,56.60263583412411,46.90911080702121,60.323710996328956,47.57975238851688,48.949719121002545,52.729278563569444,42.418426476010595,71.59835887765955,58.46190377856383,51.611304373827515,46.09538501195403,41.960396997571465,52.67379712205154,54.93055921061586,47.27770025762172,48.70145171538544,53.96431392619803,49.63997827748732,37.0763416885338,54.72247022394713,51.76425707515834,55.16638947792801,44.767814753756554,35.17864528679287,41.31534032080084,52.136477008660115,64.59913191772642,66.51677894335685,52.16651063245244,39.84109026818098,47.68958151194238,53.16978818869427,53.09634981258728,50.70317550824377,59.41166041020551,43.74489903311572,34.87524618948022,43.89453301745219,41.902683420783184,65.6683757674323,48.73245159376788,40.036841123654696,54.35258187417905,57.080515307655496,50.40662892778834,51.381891452946874,57.1986902840676,53.63538151754187,45.134719902113964,54.155944902626196,56.532558613530725,52.42509172494881,56.14117210714401,54.122606977491316,48.37433580015702,49.000495417083165,54.32293079058687,46.15099968434158,58.08694126790525,58.55479194830552,35.797537146888295,49.53240994811158,44.764298163816235,45.58020561822648,51.03341452917412,48.83298780568045,53.97098310061741,52.26779475220127,52.609491335053924,44.5335335779363,47.57577129889333,60.22439153253833,32.65714068450845,62.036192528685035,46.08508543995493,58.266817864933685,31.84572275361083,47.07930455365735,55.948916796922425,51.05865096080798,57.11900104345914,43.884210299423685,46.09132328912198,45.430328365262014,53.560784835854335,53.24500445085898,49.14962547217731,48.159590666748215,47.96451246256629,50.61714229170895,43.36966659406696,49.60943553222352,49.001603905406746,46.22837424348065,46.01832568288941,60.348594765891825,45.70719512317608,52.89232719925588,59.5831365505469,55.19014622800908,50.1485563195111,57.10359515440949,40.0281941409815,41.39146411317589,47.23188489797374,48.465447148842195,49.33775190786756,63.1652517188969,61.82297242534171,49.740169286287546,51.79249185833991,43.65572006945699,52.23867230809742,40.609556487145596,59.80221168331481,46.37240593348712,53.90846855033578,40.8616741736464,59.744290104246076,54.28475986148319,63.722255227821535,50.48165750798499,38.6650789082779,44.514411233064116,41.21511250455749,61.0523074950202,45.63175402120086,44.735380169385465,54.17272932778385,51.86846486329306,53.45318819573894,46.489651592386224,36.016066082988814,40.488771072086685,34.631212500701686,58.96805901293492,56.37498163711718,47.38432942188311,54.371458145086336,54.718119718920526,54.459112276672194,53.7306855002711,56.19492747938209,50.58239865177624,34.46171868975061,30.62996413035126,58.86292770638934,54.189564659695044,32.40836242631134,51.22918171331966,43.8547799346925,46.17050761704534,31.77498655962244,55.41129419003819,49.41636439908562,55.72913082740707,57.636511387497514,59.04000631424232,61.560297793475726,52.0572294974216,51.53370287494003,45.53504907137252,53.71625962626054,48.33951907060081,41.76364625660767,58.435065991888706,55.02515575733616,31.196090446404526,36.94317686515822,48.47795968419333,40.60053743073699,58.65466399455973,51.32674254005941,54.061368786724515,56.6575960002167,59.494119398178675,48.145102831174185,54.489639832989454,51.880154947646695,55.731739273705834,54.021416343068836,60.134208315911785,53.8977350758478,46.740018731447634,50.96346086640495,42.12179683573595]],"welford_var":[176.9621227631074,8.49531814642992,63.80008817089157,50.573068967937715],"welford_mean":[49.43966197586067,47.18791734689066,50.99198141665452,50.061263380720426],"mc":{"beta_5":{"mean_s2":2.5517552176970697,"var_s2":3.1082948564877246,"reps":400000},"beta_20":{"mean_s2":2.5515533115230045,"var_s2":0.6473731691518736,"reps":400000},"unif_5":{"mean_s2":8.327566191274293,"var_s2":18.02877151825673,"reps":400000},"unif_20":{"mean_s2":8.33615492678406,"var_s2":3.1421435296061726,"reps":400000},"binom_5":{"mean_s2":2.1002545,"var_s2":2.0877245852297506,"reps":400000},"binom_20":{"mean_s2":2.0996014473684212,"var_s2":0.4347346542444425,"reps":400000},"bern_5":{"mean_s2":8.99705,"var_s2":123.20409129749999,"reps":400000},"bern_20":{"mean_s2":9.001371710526314,"var_s2":29.219739981291113,"reps":400000}},"t975":{"1":12.706204736174694,"2":4.302652729749462,"4":2.7764451051977934,"9":2.262157162798205,"19":2.0930240544083087,"49":2.0095752371292392,"99":1.9842169515864174,"199":1.9719565442517533,"499":1.9647293909876886,"999":1.9623414611334493},"xoshiro":[2576975000,1162350735,1643173032,2773097557,901410421,2333174503,2671116222,1745291542,4105866569,156770058,1003878485,3992367913]};
+</script>
+<script>
+/* =====================================================================
+ *  HMWK 4 — interfaccia: Es. 1 (derivazione interattiva, stabilità)
+ *  ed Es. 2 (simulazione m hacker × n sistemi con Welford).
+ * ===================================================================== */
+(() => {
+  'use strict';
+  const W = WelfordCore;
+
+  /* ------------------------------ utility ------------------------------ */
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const yieldUI = () => new Promise((r) => setTimeout(r, 0));
+  const nf = (x, d = 0) => Number(x).toLocaleString('it-IT', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻' };
+  const sup = (e) => String(e).split('').map((c) => SUP[c] || c).join('');
+  function sig(x, s = 3) {
+    if (!isFinite(x)) return '—';
+    if (x === 0) return '0';
+    const a = Math.abs(x), e = Math.floor(Math.log10(a));
+    if (e >= -3 && e < 6) return nf(x, Math.max(0, s - 1 - e));
+    return `${nf(x / Math.pow(10, e), s - 1)}·10${sup(e)}`;
+  }
+  const f3 = (x) => nf(x, 3);
+  const pct = (x, d = 1) => nf(100 * x, d) + '%';
+  const clock = () => new Date().toLocaleTimeString('it-IT', { hour12: false });
+  function addLog(panel, html, cls) {
+    const p = typeof panel === 'string' ? $(panel) : panel;
+    const div = document.createElement('div');
+    div.innerHTML = `<span class="text-gray-500">[${clock()}]</span> ${html}`;
+    if (cls) div.className = cls;
+    p.appendChild(div);
+    p.scrollTop = p.scrollHeight;
+    return div;
+  }
+  function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+  const COL = { mean: '#059669', meanHi: '#10b981', var: '#d97706', varHi: '#f59e0b', alt: '#3b82f6', altHi: '#60a5fa' };
+  const CH = { surface: '#0f172a', grid: '#1e293b', axis: '#334155', tick: '#64748b', label: '#94a3b8', strong: '#e2e8f0', light: '#cbd5e1', band: 'rgba(148,163,184,0.10)' };
+
+  /* ------------------------------ toolkit grafici ------------------------------ */
+  function niceTicks(d0, d1, count = 5) {
+    const span = d1 - d0;
+    if (!(span > 0)) return [d0];
+    const raw = span / count, p10 = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p10;
+    const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p10;
+    const out = [];
+    for (let v = Math.ceil(d0 / step) * step; v <= d1 + 1e-9 * step; v += step) out.push(Math.abs(v) < 1e-12 * step ? 0 : v);
+    return out;
+  }
+  function ticks3(d0, d1) { for (const c of [3, 4, 5, 6, 8]) { const t = niceTicks(d0, d1, c); if (t.length >= 3) return t; } return niceTicks(d0, d1, 8); }
+  function logTicks(d0, d1) {
+    const out = [];
+    for (let e = Math.floor(Math.log10(d0)); e <= Math.ceil(Math.log10(d1)); e++) { const v = Math.pow(10, e); if (v >= d0 * 0.999 && v <= d1 * 1.001) out.push(v); }
+    if (out.length <= 2) {
+      for (let e = Math.floor(Math.log10(d0)); e <= Math.ceil(Math.log10(d1)); e++) for (const k of [2, 5]) { const v = k * Math.pow(10, e); if (v >= d0 && v <= d1) out.push(v); }
+      out.sort((a, b) => a - b);
+    }
+    return out;
+  }
+  const fmtTick = (v) => (Math.abs(v) >= 1000 ? nf(v) : Math.abs(v) >= 1 || v === 0 ? nf(v, Number.isInteger(v) ? 0 : 1) : sig(v, 2));
+  function fmtPow(v) {
+    const e = Math.round(Math.log10(v));
+    if (Math.abs(v - Math.pow(10, e)) < 1e-9 * Math.pow(10, e) && (e < -2 || e > 4)) return '10' + sup(e);
+    return v >= 1 ? nf(v) : sig(v, 1);
+  }
+  function spread(items, gap, lo, hi) {
+    const a = items.slice().sort((x, y) => x.y - y.y);
+    for (let i = 1; i < a.length; i++) if (a[i].y - a[i - 1].y < gap) a[i].y = a[i - 1].y + gap;
+    const over = a.length ? a[a.length - 1].y - hi : 0;
+    if (over > 0) { for (const it of a) it.y -= over; for (let i = a.length - 2; i >= 0; i--) if (a[i + 1].y - a[i].y < gap) a[i].y = a[i + 1].y - gap; }
+    for (const it of a) it.y = Math.max(lo, it.y);
+    return items;
+  }
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const MONO = "'Fira Code', monospace", SANS = "'Inter', sans-serif";
+  function el(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  function text(parent, x, y, s, attrs = {}) { const t = el('text', { x, y, fill: CH.tick, 'font-size': 10, 'font-family': MONO, ...attrs }, parent); t.textContent = s; return t; }
+  const tip = $('chart-tip');
+  function tipShow(x, y, rows) {
+    tip.replaceChildren();
+    for (const [v, l] of rows) {
+      const d = document.createElement('div'), sv = document.createElement('span');
+      sv.className = 'tv'; sv.textContent = v; d.appendChild(sv);
+      if (l) d.appendChild(document.createTextNode(' ' + l));
+      tip.appendChild(d);
+    }
+    tip.classList.remove('hidden');
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let left = x + 14, top = y + 14;
+    if (left + w > innerWidth - 8) left = x - w - 14;
+    if (top + h > innerHeight - 8) top = y - h - 14;
+    tip.style.left = Math.max(4, left) + 'px'; tip.style.top = Math.max(4, top) + 'px';
+  }
+  function tipHide() { tip.classList.add('hidden'); }
+  function bindHit(node, rowsFn, onEnter, onLeave) {
+    node.style.cursor = 'crosshair';
+    node.addEventListener('pointermove', (e) => tipShow(e.clientX, e.clientY, rowsFn()));
+    node.addEventListener('pointerenter', () => onEnter && onEnter());
+    node.addEventListener('pointerleave', () => { tipHide(); if (onLeave) onLeave(); });
+  }
+  let clipSeq = 0;
+  function scale(type, d0, d1, r0, r1) {
+    if (type === 'log') { const l0 = Math.log10(d0), l1 = Math.log10(d1); return (v) => r0 + ((Math.log10(v) - l0) / (l1 - l0)) * (r1 - r0); }
+    return (v) => r0 + ((v - d0) / (d1 - d0)) * (r1 - r0);
+  }
+  function frame(host, o) {
+    host.replaceChildren();
+    const Wd = Math.max(140, Math.floor(o.width || host.clientWidth || 600));
+    const H = o.height || 280, m = Object.assign({ l: 52, r: 16, t: 14, b: 40 }, o.margin || {});
+    const svg = el('svg', { viewBox: `0 0 ${Wd} ${H}`, width: Wd, height: H, role: 'img', 'aria-label': o.aria || '' }, host);
+    el('rect', { x: 0, y: 0, width: Wd, height: H, rx: 8, fill: CH.surface }, svg);
+    const pw = Wd - m.l - m.r, ph = H - m.t - m.b;
+    const X = scale(o.x.type, o.x.domain[0], o.x.domain[1], m.l, m.l + pw);
+    const Y = scale(o.y.type, o.y.domain[0], o.y.domain[1], m.t + ph, m.t);
+    const xt = o.x.ticks || (o.x.type === 'log' ? logTicks(...o.x.domain) : niceTicks(...o.x.domain, Wd < 400 ? 3 : 5));
+    const yt = o.y.ticks || (o.y.type === 'log' ? logTicks(...o.y.domain) : niceTicks(...o.y.domain, 4));
+    const fx = o.x.fmt || fmtTick, fy = o.y.fmt || fmtTick;
+    for (const v of yt) { const y = Y(v); el('line', { x1: m.l, x2: m.l + pw, y1: y, y2: y, stroke: CH.grid, 'stroke-width': 1 }, svg); text(svg, m.l - 6, y + 3.5, fy(v), { 'text-anchor': 'end' }); }
+    for (const v of xt) { const x = X(v); if (o.xGrid !== false) el('line', { x1: x, x2: x, y1: m.t, y2: m.t + ph, stroke: CH.grid, 'stroke-width': 1 }, svg); text(svg, x, m.t + ph + 15, fx(v), { 'text-anchor': 'middle' }); }
+    el('line', { x1: m.l, x2: m.l + pw, y1: m.t + ph, y2: m.t + ph, stroke: CH.axis, 'stroke-width': 1 }, svg);
+    if (o.x.title) text(svg, m.l + pw / 2, H - 6, o.x.title, { 'text-anchor': 'middle', fill: CH.label, 'font-family': SANS, 'font-size': 11 });
+    if (o.y.title) text(svg, m.l + 4, m.t + 12, o.y.title, { fill: CH.label, 'font-family': SANS, 'font-size': 11 });
+    const idc = 'clip' + ++clipSeq;
+    const cp = el('clipPath', { id: idc }, el('defs', {}, svg));
+    el('rect', { x: m.l, y: m.t - 1, width: pw, height: ph + 2 }, cp);
+    const g = el('g', { 'clip-path': `url(#${idc})` }, svg), top = el('g', {}, svg);
+    return { svg, g, top, W: Wd, H, m, pw, ph, X, Y };
+  }
+  const linePath = (pts) => pts.filter((p) => isFinite(p[0]) && isFinite(p[1])).map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
+  const dot = (parent, x, y, color, hollow, r = 4) => el('circle', { cx: x, cy: y, r, fill: hollow ? CH.surface : color, stroke: hollow ? color : CH.surface, 'stroke-width': 2 }, parent);
+  const barPath = (x, y, w, h, r) => { r = Math.max(0, Math.min(r, w / 2, h)); return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; };
+  function legend(id, items) {
+    $(id).innerHTML = items.map((it) => {
+      let sw;
+      if (it.type === 'line') sw = `<span class="inline-block w-4 h-0.5 rounded" style="background:${it.color}"></span>`;
+      else if (it.type === 'dot') sw = `<span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${it.color}"></span>`;
+      else if (it.type === 'band') sw = `<span class="inline-block w-3 h-3 rounded-sm" style="background:${it.color};border:1px solid rgba(148,163,184,.35)"></span>`;
+      else sw = `<span class="inline-block w-3 h-3 rounded-sm" style="background:${it.color}"></span>`;
+      return `<div class="flex items-center gap-1.5">${sw} ${esc(it.label)}</div>`;
+    }).join('');
+  }
+  const redraws = new Map(), observed = new WeakSet();
+  function draw(id, fn) {
+    redraws.set(id, fn); fn();
+    const node = $(id);
+    if (!node || observed.has(node) || !('ResizeObserver' in window)) return;
+    observed.add(node);
+    let lastW = node.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (!node.isConnected) { ro.disconnect(); return; }
+      const w = node.clientWidth;
+      if (Math.abs(w - lastW) > 2) { lastW = w; const f = redraws.get(id); if (f) f(); }
+    });
+    ro.observe(node);
+  }
+  const tiles = (id, items) => { $(id).innerHTML = items.map((t) => `<div class="tile"><div class="lbl">${t.label}</div><div class="val">${t.value}</div><div class="ref">${t.ref}</div></div>`).join(''); };
+  function errBar(parent, x, y0, y1, color) { el('line', { x1: x, x2: x, y1: y0, y2: y1, stroke: color, 'stroke-width': 1 }, parent); }
+  const zCls = (z) => (Math.abs(z) < 2 ? 'ok' : Math.abs(z) < 3 ? 'wa' : 'ko');
+
+  /* ===================================================================== *
+   *  ES. 1 · esecuzione passo-passo
+   * ===================================================================== */
+  let busy1 = false;
+  function parseData() {
+    const raw = $('data-1').value.split(/[\s,;]+/).filter(Boolean);
+    const xs = raw.map((s) => Number(s.replace(',', '.')));
+    const st = $('data-1-status');
+    if (raw.length < 2 || xs.some((x) => !isFinite(x))) { st.innerHTML = '<span class="ko">✗ servono almeno 2 numeri validi</span>'; return null; }
+    if (xs.length > 60) { st.innerHTML = '<span class="wa">⚠ massimo 60 valori per la visualizzazione passo-passo</span>'; return null; }
+    const out = xs.some((x) => x < 0 || x > 10);
+    st.innerHTML = out ? `<span class="wa">⚠ ${xs.length} valori, alcuni fuori da [0; 10]: il calcolo funziona comunque</span>` : `<span class="ok">✓ ${xs.length} punteggi</span>`;
+    return xs;
+  }
+  function renderTrace(tr, upTo) {
+    const n = tr.length, last = Math.min(upTo, n);
+    // grafico
+    draw('chart-trace', () => {
+      const xs = tr.map((r) => r.x), lo = Math.min(0, ...xs), hi = Math.max(10, ...xs);
+      const f = frame($('chart-trace'), {
+        height: 250, margin: { l: 40, r: 14, t: 14, b: 38 }, aria: 'Media corrente e banda di una deviazione standard',
+        x: { type: 'lin', domain: [0.5, n + 0.5], ticks: niceTicks(1, n, Math.min(n, 10)).filter((v) => Number.isInteger(v)), title: 'k = numero di punteggi elaborati' },
+        y: { type: 'lin', domain: [lo - 0.5, hi + 0.5] },
+      });
+      const vis = tr.slice(0, last);
+      // banda M ± s
+      const bandPts = vis.filter((r) => r.k >= 2);
+      if (bandPts.length) {
+        const up = bandPts.map((r) => [f.X(r.k), f.Y(r.mean + Math.sqrt(r.s2))]), dn = bandPts.map((r) => [f.X(r.k), f.Y(r.mean - Math.sqrt(r.s2))]).reverse();
+        el('path', { d: linePath(up) + dn.map((p) => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('') + 'Z', fill: 'rgba(217,119,6,0.16)', stroke: 'rgba(217,119,6,0.45)', 'stroke-width': 1 }, f.g);
+      }
+      // scarti δ
+      vis.forEach((r, i) => {
+        if (r.k < 2) return;
+        el('line', { x1: f.X(r.k), x2: f.X(r.k), y1: f.Y(r.prevMean), y2: f.Y(r.x), stroke: '#f87171', 'stroke-width': i === last - 1 ? 2 : 1, 'stroke-opacity': i === last - 1 ? 1 : 0.35 }, f.g);
+      });
+      el('path', { d: linePath(vis.map((r) => [f.X(r.k), f.Y(r.mean)])), fill: 'none', stroke: COL.meanHi, 'stroke-width': 2 }, f.g);
+      vis.forEach((r, i) => {
+        dot(f.top, f.X(r.k), f.Y(r.x), '#9ca3af', false, 3.5);
+        const d = dot(f.top, f.X(r.k), f.Y(r.mean), i === n - 1 && last === n ? COL.alt : COL.meanHi, false, i === last - 1 ? 5 : 3.5);
+        const hit = el('rect', { x: f.X(r.k) - f.pw / n / 2, y: f.m.t, width: f.pw / n, height: f.ph, fill: 'transparent' }, f.top);
+        bindHit(hit, () => [[`k = ${r.k}`, ''], [nf(r.x, 3), 'xₖ'], [nf(r.d, 3), 'δₖ = xₖ − Mₖ₋₁'], [nf(r.mean, 4), 'Mₖ'], [nf(r.ss, 4), 'Sₖ'], [r.k > 1 ? nf(r.s2, 4) : '—', 's²ₖ']], () => d.setAttribute('r', 6), () => d.setAttribute('r', 3.5));
+      });
+    });
+    // tabella
+    let html = '<thead><tr><th class="!text-right">k</th><th class="!text-right">xₖ</th><th class="!text-right">δₖ = xₖ − Mₖ₋₁</th><th class="!text-right">Mₖ</th><th class="!text-right">Sₖ</th><th class="!text-right">s²ₖ = Sₖ/(k−1)</th><th class="!text-right">σ̂²ₖ = Sₖ/k</th></tr></thead><tbody>';
+    tr.forEach((r, i) => {
+      if (i >= last) return;
+      const cls = i === n - 1 && last === n ? 'fin' : i === last - 1 ? 'cur' : '';
+      html += `<tr class="${cls}"><td class="num">${r.k}</td><td class="num">${nf(r.x, 3)}</td><td class="num text-red-300">${nf(r.d, 4)}</td><td class="num text-emerald-300">${nf(r.mean, 4)}</td><td class="num">${nf(r.ss, 4)}</td><td class="num text-amber-300">${r.k > 1 ? nf(r.s2, 4) : '—'}</td><td class="num text-gray-400">${nf(r.pop, 4)}</td></tr>`;
+    });
+    $('trace-table').innerHTML = html + '</tbody>';
+  }
+  async function runTrace(animated) {
+    if (busy1) return;
+    const xs = parseData();
+    if (!xs) return;
+    busy1 = true;
+    for (const id of ['btn-run-1', 'btn-instant-1', 'btn-random-1']) { $(id).disabled = true; $(id).classList.add('opacity-50'); }
+    const log = $('log-1');
+    log.innerHTML = '';
+    try {
+      const tr = W.trace(xs);
+      addLog(log, `Inizializzazione: k = 0, M₀ = 0, S₀ = 0 · ${xs.length} punteggi`);
+      for (let i = 0; i < tr.length; i++) {
+        const r = tr[i];
+        addLog(log, `<span class="text-gray-400">Step k = ${r.k}:</span> x = ${nf(r.x, 3)} · δ = ${nf(r.x, 3)} − ${nf(r.prevMean, 3)} = <span class="text-red-300">${nf(r.d, 3)}</span> · M = <span class="neon-text-green">${nf(r.mean, 3)}</span> · S = ${nf(r.prevSS, 3)} + ${nf(r.d, 3)}·${nf(r.x - r.mean, 3)} = <span class="text-amber-300">${nf(r.ss, 3)}</span>`);
+        if (animated) { renderTrace(tr, i + 1); await sleep(520); }
+      }
+      renderTrace(tr, tr.length);
+      const f = tr[tr.length - 1];
+      addLog(log, '<br/>');
+      addLog(log, '=== ELABORAZIONE COMPLETATA ===');
+      addLog(log, `s² = S/(n − 1) = ${nf(f.ss, 4)}/${f.k - 1}:`);
+      addLog(log, `<span class="text-lg font-bold neon-text-blue">x̄ = ${nf(f.mean, 4)} · s² = ${nf(f.s2, 4)}</span>`);
+      // verifica a due passate
+      const mean2 = xs.reduce((a, b) => a + b, 0) / xs.length, s22 = xs.reduce((a, x) => a + (x - mean2) ** 2, 0) / (xs.length - 1);
+      $('trace-check').innerHTML = `Verifica con il metodo a due passate: x̄ = ${nf(mean2, 6)}, s² = ${nf(s22, 6)} · differenza con Welford ${sig(Math.abs(s22 - f.s2), 2)} <span class="ok">✓</span>`;
+    } finally {
+      busy1 = false;
+      for (const id of ['btn-run-1', 'btn-instant-1', 'btn-random-1']) { $(id).disabled = false; $(id).classList.remove('opacity-50'); }
+    }
+  }
+
+  /* ===================================================================== *
+   *  ES. 1 · stabilità numerica
+   * ===================================================================== */
+  const stab = { set: 'classic', prec: '64' };
+  const STAB_SCORES = (() => { const r = W.makeRng(42, 9), out = []; for (let i = 0; i < 20; i++) out.push(Math.floor(r.u() * 11)); return out; })();
+  const baseData = () => (stab.set === 'classic' ? [4, 7, 13, 16] : STAB_SCORES);
+  const METHODS = [
+    { key: 'naive', label: 'da manuale Σx² − (Σx)²/n', color: COL.var, fn: W.naive },
+    { key: 'two', label: 'due passate', color: COL.alt, fn: W.twoPass },
+    { key: 'welford', label: 'Welford', color: COL.meanHi, fn: W.welford },
+  ];
+  function evalStab(e) {
+    const c = Math.round(Math.pow(10, e)), xs = baseData().map((x) => x + c);
+    const ex64 = W.exactVarianceInt(xs), xs32 = xs.map(W.f32), ex32 = W.exactVarianceInt(xs32);
+    const res = { c, ex64, ex32, collapsed32: ex32 === 0 || xs32.some((v, i) => v !== xs[i]) };
+    for (const M of METHODS) {
+      const v64 = M.fn(xs), v32 = M.fn(xs, W.f32);
+      res[M.key] = { v64, v32, e64: Math.abs(v64 - ex64) / ex64, e32: ex32 > 0 ? Math.abs(v32 - ex32) / ex32 : NaN };
+    }
+    return res;
+  }
+  function renderStab() {
+    const e = Number($('offset').value);
+    $('offset-exp').textContent = String(e);
+    document.querySelectorAll('#stab-seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.set === stab.set)));
+    document.querySelectorAll('#prec-seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.prec === stab.prec)));
+    $('stab-data').textContent = `dati: ${baseData().join(', ')} · varianza esatta ${nf(W.exactVarianceInt(baseData()), 4)}`;
+    const r = evalStab(e);
+    const fmtE = (x) => (isNaN(x) ? 'input perso' : x === 0 ? 'esatto' : sig(x, 2));
+    let html = `<thead><tr><th>metodo</th><th class="!text-right">float64</th><th class="!text-right">err. rel.</th><th class="!text-right">float32</th><th class="!text-right">err. rel.</th></tr></thead><tbody>`;
+    for (const M of METHODS) {
+      const q = r[M.key];
+      html += `<tr><td class="whitespace-nowrap"><span class="inline-block w-2.5 h-2.5 rounded-full mr-1" style="background:${M.color}"></span>${M.key === 'naive' ? 'da manuale' : M.label}</td>
+        <td class="num ${q.e64 > 1e-6 ? 'ko' : ''}">${sig(q.v64, 5)}</td><td class="num ${q.e64 > 1e-6 ? 'ko' : 'ok'}">${fmtE(q.e64)}</td>
+        <td class="num ${q.e32 > 1e-3 ? 'ko' : ''}">${sig(q.v32, 5)}</td><td class="num ${q.e32 > 1e-3 ? 'ko' : isNaN(q.e32) ? 'text-gray-500' : 'ok'}">${isNaN(q.e32) ? '—' : fmtE(q.e32)}</td></tr>`;
+    }
+    html += `<tr><td class="text-gray-400">valore esatto</td><td class="num text-gray-400">${sig(r.ex64, 5)}</td><td></td><td class="num text-gray-400">${sig(r.ex32, 5)}</td><td class="text-gray-500 text-[10px]">${r.collapsed32 && r.ex32 === 0 ? 'dati collassati' : ''}</td></tr>`;
+    $('stab-table').innerHTML = html + '</tbody>';
+    const nv = r.naive.v64;
+    $('stab-note').innerHTML = r.naive.e64 > 1e-6
+      ? `Con c = 10${sup(e)} la formula da manuale in float64 restituisce <strong class="text-white">${sig(nv, 5)}</strong> invece di ${sig(r.ex64, 4)}${nv < 0 ? ': una varianza <strong class="text-white">negativa</strong>' : ''}. Welford dà ${sig(r.welford.v64, 6)}.${r.collapsed32 ? ' In float32 i dati stessi non sono più rappresentabili esattamente (7 cifre): l\'errore nasce già nell\'input.' : ''}`
+      : `Con c = 10${sup(e)} i tre metodi concordano in float64. Sposta il cursore oltre 10⁷–10⁸ per vedere la formula da manuale perdere tutte le cifre${r.naive.e32 > 1e-3 ? '; in float32 è già sbagliata' : ''}.`;
+    draw('chart-stab', () => {
+      const prec = stab.prec, ES = []; for (let x = 0; x <= 15.0001; x += 0.25) ES.push(Math.round(x * 100) / 100);
+      const rows = ES.map((x) => [x, evalStab(x)]);
+      const FLOOR = 1e-17;
+      const f = frame($('chart-stab'), {
+        height: 300, margin: { l: 52, r: 86, t: 14, b: 40 }, aria: 'Errore relativo della varianza in funzione dello spostamento',
+        x: { type: 'lin', domain: [0, 15], ticks: [0, 3, 6, 9, 12, 15], fmt: (v) => '10' + sup(v), title: 'spostamento c aggiunto ai dati' },
+        y: { type: 'log', domain: [FLOOR, 1e3], ticks: [1e-16, 1e-12, 1e-8, 1e-4, 1], fmt: (v) => (v === 1 ? '1' : '10' + sup(Math.round(Math.log10(v)))) },
+      });
+      if (prec === '32') {
+        const first = rows.find(([, q]) => q.collapsed32);
+        if (first) {
+          el('rect', { x: f.X(first[0]), y: f.m.t, width: f.m.l + f.pw - f.X(first[0]), height: f.ph, fill: CH.band }, f.g);
+          text(f.g, f.X(first[0]) + 6, f.m.t + 14, 'dati non rappresentabili in float32', { fill: CH.label, 'font-size': 10, 'font-family': SANS });
+        }
+      }
+      el('line', { x1: f.X(e), x2: f.X(e), y1: f.m.t, y2: f.m.t + f.ph, stroke: 'rgba(226,232,240,0.5)', 'stroke-width': 1 }, f.g);
+      const labs = [];
+      for (const M of METHODS) {
+        const pts = rows.map(([x, q]) => { const er = prec === '64' ? q[M.key].e64 : q[M.key].e32; return isNaN(er) ? [NaN, NaN] : [f.X(x), f.Y(Math.max(FLOOR, Math.min(1e3, er)))]; });
+        el('path', { d: linePath(pts), fill: 'none', stroke: M.color, 'stroke-width': 2, 'stroke-linejoin': 'round' }, f.g);
+        const lastPt = pts.filter((p) => isFinite(p[1])).pop();
+        if (lastPt) labs.push({ t: M.key === 'naive' ? 'da manuale' : M.label, y: lastPt[1] + 3.5 });
+      }
+      spread(labs, 12, f.m.t + 8, f.m.t + f.ph).forEach((l) => text(f.top, f.m.l + f.pw + 6, l.y, l.t, { fill: CH.strong, 'font-size': 10 }));
+      text(f.top, f.m.l + 6, f.Y(FLOOR) - 5, 'esatto (errore 0)', { fill: CH.label, 'font-size': 10, 'font-family': SANS });
+      const ov = el('rect', { x: f.m.l, y: f.m.t, width: f.pw, height: f.ph, fill: 'transparent' }, f.top);
+      ov.style.cursor = 'crosshair';
+      ov.addEventListener('pointerleave', tipHide);
+      ov.addEventListener('pointermove', (ev) => {
+        const b = f.svg.getBoundingClientRect(), ex = Math.round((((ev.clientX - b.left - f.m.l) / f.pw) * 15) * 4) / 4;
+        const q = evalStab(Math.max(0, Math.min(15, ex)));
+        const get = (k) => (prec === '64' ? q[k].e64 : q[k].e32);
+        tipShow(ev.clientX, ev.clientY, [[`c = 10${sup(ex)}`, `float${prec}`], [fmtE(get('naive')), 'da manuale'], [fmtE(get('two')), 'due passate'], [fmtE(get('welford')), 'Welford']]);
+      });
+    });
+    legend('legend-stab', METHODS.map((M) => ({ type: 'line', color: M.color, label: M.label })).concat([{ type: 'line', color: 'rgba(226,232,240,.6)', label: 'spostamento selezionato' }]));
+  }
+
+  /* ===================================================================== *
+   *  ES. 2 · simulazione
+   * ===================================================================== */
+  const st2 = { sim: null, busy: false, logx: true, stats: null };
+  const DK = () => $('dist').value;
+  function setBusy2(b) {
+    st2.busy = b;
+    for (const id of ['btn-start', 'btn-instant', 'btn-seed']) { $(id).disabled = b; $(id).classList.toggle('opacity-50', b); }
+  }
+  async function runSim(animated) {
+    if (st2.busy) return;
+    setBusy2(true);
+    const log = $('log-2');
+    log.innerHTML = '';
+    try {
+      const dist = DK(), n = Number($('n').value), m = Number($('m').value), seed = Number($('seed').value) >>> 0;
+      const mo = W.moments(dist);
+      addLog(log, `Inizializzazione: <span class="text-white">${W.DISTS[dist].label}</span> · μ = ${f3(mo.mu)} · σ² = ${f3(mo.s2)}`);
+      addLog(log, `m = <span class="text-white">${nf(m)}</span> hacker × n = <span class="text-white">${nf(n)}</span> sistemi · seed ${seed} (xoshiro128**)`);
+      const prog = addLog(log, '<span class="text-gray-400">simulazione: 0%</span>');
+      let lastT = 0;
+      const sim = await W.simulate({
+        dist, n, m, seed,
+        onProgress: async (done) => {
+          const now = performance.now();
+          if (now - lastT > 120 || done === m) { lastT = now; prog.innerHTML = `<span class="text-gray-500">[${clock()}]</span> <span class="text-gray-400">simulazione: ${nf(done)} / ${nf(m)} hacker (${Math.round((100 * done) / m)}%)</span>`; await yieldUI(); }
+        },
+      });
+      st2.sim = sim;
+      st2.stats = sim.cps.map((_, ci) => W.acrossHackers(sim, ci));
+      addLog(log, `${nf(sim.m * sim.n)} punteggi elaborati con Welford in <span class="text-white">${nf(sim.ms, 0)} ms</span>`);
+      renderAll2();
+      if (animated) await animateTraj(log);
+      else drawTraj(sim.P);
+      const last = st2.stats[st2.stats.length - 1];
+      addLog(log, '<br/>');
+      addLog(log, '=== SIMULAZIONE COMPLETATA ===');
+      addLog(log, `MEDIA SU ${nf(m)} HACKER A n = ${nf(n)} (μ = ${f3(mo.mu)}, σ² = ${f3(mo.s2)}):`);
+      addLog(log, `<span class="text-lg font-bold neon-text-blue">x̄ = ${nf(last.avgMean, 4)} · s² = ${nf(last.avgVar, 4)}</span>`);
+    } catch (e) {
+      addLog(log, 'Errore: ' + esc(e.message), 'text-red-400');
+      console.error(e);
+    } finally {
+      setBusy2(false);
+      fixStickyTop();
+    }
+  }
+  function logCheckpoint(log, ci) {
+    const sim = st2.sim, n = sim.cps[ci], s = st2.stats[ci], th = W.theory(sim.dist, n);
+    addLog(log, `<span class="text-gray-400">Step n = ${nf(n)}:</span> media x̄ = <span class="neon-text-green">${nf(s.avgMean, 3)}</span> · media s² = <span class="text-amber-300">${nf(s.avgVar, 3)}</span> <span class="text-gray-500">(σ² = ${f3(th.s2)})</span> · sd(x̄) = ${sig(s.sdMean, 3)}`);
+  }
+
+  /* ---- canvas delle traiettorie ---- */
+  let trajBase = null, trajGeom = null;
+  function drawTraj(upTo) {
+    const sim = st2.sim, canvas = $('traj-canvas');
+    if (!sim) return;
+    const Wd = Math.max(280, $('traj-wrap').clientWidth), H = Math.round(Math.min(620, Math.max(380, Wd * 0.8)));
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(Wd * dpr); canvas.height = Math.round(H * dpr); canvas.style.height = H + 'px';
+    if (!trajBase) trajBase = document.createElement('canvas');
+    trajBase.width = canvas.width; trajBase.height = canvas.height;
+    const ctx = trajBase.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, Wd, H);
+    const n = sim.n, P = sim.P, grid = sim.grid, np = sim.nPaths, mo = W.moments(sim.dist);
+    const m = { l: 52, r: 22, t: 26, b: 34 }, gap = 40, pw = Wd - m.l - m.r, ph = (H - m.t - m.b - gap) / 2;
+    const logx = st2.logx;
+    const X = (k) => m.l + (logx ? Math.log10(Math.max(1, k)) / Math.log10(n) : (k - 1) / (n - 1)) * pw;
+    const lim = Math.max(1, Math.min(P, upTo));
+    // domini
+    let lo = Infinity, hi = -Infinity; const vv = [];
+    for (let j = 0; j < np; j++) for (let i = 0; i < P; i++) { const a = sim.PM[j * P + i]; lo = Math.min(lo, a); hi = Math.max(hi, a); const b = sim.PV[j * P + i]; if (isFinite(b)) vv.push(b); }
+    lo = Math.min(lo, mo.mu - 0.5); hi = Math.max(hi, mo.mu + 0.5);
+    const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+    vv.sort((a, b) => a - b);
+    const vHi = Math.max(vv[Math.floor(vv.length * 0.99)] || 1, mo.s2 * 1.6) * 1.08;
+    const panels = [
+      { y0: lo, y1: hi, top: m.t, data: sim.PM, color: 'rgba(16,185,129,0.26)', hi: '#6ee7b7', label: 'Mₖ: media campionaria corrente', center: mo.mu, band: (k) => 2 * mo.sd / Math.sqrt(k), cname: 'μ' },
+      { y0: 0, y1: vHi, top: m.t + ph + gap, data: sim.PV, color: 'rgba(217,119,6,0.30)', hi: '#fcd34d', label: 's²ₖ: varianza campionaria corrente', center: mo.s2, band: (k) => (k >= 2 ? 2 * W.theory(sim.dist, k).sdS2 : NaN), cname: 'σ²' },
+    ];
+    const KS = []; for (let i = 0; i <= 200; i++) KS.push(logx ? Math.pow(n, i / 200) : 1 + (i / 200) * (n - 1));
+    ctx.font = "10px 'Fira Code', monospace";
+    for (const pn of panels) {
+      const Y = (v) => pn.top + ph - ((v - pn.y0) / (pn.y1 - pn.y0)) * ph;
+      pn.Y = Y;
+      ctx.strokeStyle = CH.grid; ctx.lineWidth = 1; ctx.fillStyle = CH.tick; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      for (const v of niceTicks(pn.y0, pn.y1, 4)) { const y = Y(v); ctx.beginPath(); ctx.moveTo(m.l, y); ctx.lineTo(m.l + pw, y); ctx.stroke(); ctx.fillText(fmtTick(v), m.l - 6, y); }
+      const xt = logx ? logTicks(1, n) : niceTicks(1, n, Wd < 480 ? 4 : 6);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for (const v of xt) { const x = X(v), lab = fmtTick(v), tw = ctx.measureText(lab).width; ctx.beginPath(); ctx.moveTo(x, pn.top); ctx.lineTo(x, pn.top + ph); ctx.stroke(); ctx.fillText(lab, Math.min(x, Wd - 3 - tw / 2), pn.top + ph + 5); }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#e5e7eb'; ctx.font = "600 11px 'Fira Code', monospace";
+      ctx.fillText(pn.label, m.l, pn.top - 8); ctx.font = "10px 'Fira Code', monospace";
+      ctx.save(); ctx.beginPath(); ctx.rect(m.l, pn.top, pw, ph); ctx.clip();
+      // banda teorica ±2 sd
+      const bk = KS.filter((k) => isFinite(pn.band(k)));
+      ctx.beginPath(); bk.forEach((k, i) => { const y = Y(pn.center + pn.band(k)); i ? ctx.lineTo(X(k), y) : ctx.moveTo(X(k), y); });
+      for (let i = bk.length - 1; i >= 0; i--) ctx.lineTo(X(bk[i]), Y(Math.max(pn.y0, pn.center - pn.band(bk[i]))));
+      ctx.closePath(); ctx.fillStyle = 'rgba(59,130,246,0.10)'; ctx.fill();
+      for (const sgn of [1, -1]) { ctx.beginPath(); bk.forEach((k, i) => { const y = Y(pn.center + sgn * pn.band(k)); i ? ctx.lineTo(X(k), y) : ctx.moveTo(X(k), y); }); ctx.strokeStyle = 'rgba(59,130,246,0.5)'; ctx.lineWidth = 1; ctx.stroke(); }
+      // percorsi
+      const path = (j) => { ctx.beginPath(); let started = false; for (let i = 0; i < lim; i++) { const v = pn.data[j * P + i]; if (!isFinite(v)) continue; const x = X(grid[i]), y = Y(v); started ? ctx.lineTo(x, y) : ctx.moveTo(x, y); started = true; } ctx.stroke(); };
+      ctx.strokeStyle = pn.color; ctx.lineWidth = 1;
+      for (let j = 1; j < np; j++) path(j);
+      ctx.strokeStyle = pn.hi; ctx.lineWidth = 1.8; ctx.shadowColor = pn.hi; ctx.shadowBlur = 6; path(0); ctx.shadowBlur = 0;
+      // valore teorico
+      ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(m.l, Y(pn.center)); ctx.lineTo(m.l + pw, Y(pn.center)); ctx.stroke();
+      ctx.restore();
+      const lab = `${pn.cname} = ${f3(pn.center)}`, lw = ctx.measureText(lab).width, ly = Math.max(pn.top + 12, Y(pn.center) - 8);
+      ctx.fillStyle = 'rgba(15,23,42,0.88)'; ctx.fillRect(m.l + pw - lw - 10, ly - 9, lw + 8, 14);
+      ctx.fillStyle = '#93c5fd'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(lab, m.l + pw - 6, ly - 2); ctx.textBaseline = 'alphabetic';
+    }
+    ctx.fillStyle = CH.label; ctx.textAlign = 'center'; ctx.font = "11px 'Inter', sans-serif";
+    ctx.fillText('k = sistemi attaccati' + (logx ? ' (scala log)' : ''), m.l + pw / 2, H - 4);
+    trajGeom = { m, pw, ph, X, n, P, grid, np, panels, lim, Wd };
+    blitTraj(null);
+  }
+  function blitTraj(hx) {
+    const c = $('traj-canvas'), ctx = c.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(trajBase, 0, 0);
+    if (hx != null && trajGeom) {
+      const dpr = window.devicePixelRatio || 1, g = trajGeom;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = 'rgba(226,232,240,0.55)'; ctx.lineWidth = 1;
+      for (const pn of g.panels) { ctx.beginPath(); ctx.moveTo(hx, pn.top); ctx.lineTo(hx, pn.top + g.ph); ctx.stroke(); }
+    }
+  }
+  function trajHover(e) {
+    const g = trajGeom, sim = st2.sim;
+    if (!g || !sim) return;
+    const rect = $('traj-canvas').getBoundingClientRect(), x = e.clientX - rect.left;
+    if (x < g.m.l || x > g.m.l + g.pw) { blitTraj(null); tipHide(); return; }
+    const t = (x - g.m.l) / g.pw, kT = st2.logx ? Math.pow(g.n, t) : 1 + t * (g.n - 1);
+    let i = 0, bd = Infinity;
+    for (let q = 0; q < g.lim; q++) { const d = Math.abs(g.grid[q] - kT); if (d < bd) { bd = d; i = q; } }
+    const k = g.grid[i];
+    let sm = 0, sv = 0, cv = 0;
+    for (let j = 0; j < g.np; j++) { sm += sim.PM[j * g.P + i]; const v = sim.PV[j * g.P + i]; if (isFinite(v)) { sv += v; cv++; } }
+    const th = W.theory(sim.dist, Math.max(2, k));
+    blitTraj(g.X(k));
+    tipShow(e.clientX, e.clientY, [[`k = ${nf(k)}`, ''], [nf(sm / g.np, 4), `media degli Mₖ mostrati (μ ± 2σ/√k = ${f3(th.mu)} ± ${f3(2 * th.sdMean)})`], [cv ? nf(sv / cv, 4) : '—', `media degli s²ₖ mostrati (σ² ± 2sd = ${f3(th.s2)} ± ${f3(2 * th.sdS2)})`]]);
+  }
+  async function animateTraj(log) {
+    const sim = st2.sim, P = sim.P, D = 3000;
+    const cpIdx = sim.cps.map((k) => { for (let i = 0; i < P; i++) if (sim.grid[i] >= k) return i + 1; return P; });
+    let logged = 0;
+    const t0 = performance.now();
+    for (;;) {
+      const t = Math.min(1, (performance.now() - t0) / D);
+      const kT = st2.logx ? Math.pow(sim.n, t) : 1 + t * (sim.n - 1);
+      let up = 1; while (up < P && sim.grid[up] <= kT) up++;
+      drawTraj(up);
+      while (logged < sim.cps.length && cpIdx[logged] <= up) { logCheckpoint(log, logged); logged++; }
+      if (t >= 1) break;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    while (logged < sim.cps.length) { logCheckpoint(log, logged); logged++; }
+  }
+
+  /* ---- distribuzione dei punteggi ---- */
+  function renderDist() {
+    const key = DK(), D = W.DISTS[key], mo = W.moments(key);
+    $('dist-desc').textContent = D.desc;
+    draw('chart-dist', () => {
+      const ys = D.pmf ? D.pmf.map((p) => p[1]) : Array.from({ length: 201 }, (_, i) => D.pdf((i / 200) * 10));
+      const ymax = Math.max(...ys) * 1.15;
+      const f = frame($('chart-dist'), {
+        height: 150, margin: { l: 36, r: 10, t: 10, b: 30 }, aria: 'Distribuzione dei punteggi',
+        x: { type: 'lin', domain: [-0.6, 10.6], ticks: [0, 2, 4, 6, 8, 10], title: D.kind === 'continua' ? 'punteggio (densità)' : 'punteggio (probabilità)' },
+        y: { type: 'lin', domain: [0, ymax], ticks: niceTicks(0, ymax, 2), fmt: (v) => nf(v, 2) },
+      });
+      el('rect', { x: f.X(mo.mu - mo.sd), y: f.m.t, width: f.X(mo.mu + mo.sd) - f.X(mo.mu - mo.sd), height: f.ph, fill: 'rgba(59,130,246,0.10)' }, f.g);
+      if (D.pmf) {
+        for (const [k, p] of D.pmf) {
+          const x = f.X(k - 0.32), w = f.X(k + 0.32) - x, h = (f.ph * p) / ymax;
+          const b = el('path', { d: barPath(x, f.m.t + f.ph - h, w, h, 2), fill: COL.mean }, f.g);
+          const hit = el('rect', { x, y: f.m.t, width: w, height: f.ph, fill: 'transparent' }, f.top);
+          bindHit(hit, () => [[pct(p, 2), `P(X = ${k})`]], () => b.setAttribute('fill', COL.meanHi), () => b.setAttribute('fill', COL.mean));
+        }
+      } else {
+        const pts = ys.map((v, i) => [f.X((i / 200) * 10), f.Y(v)]);
+        el('path', { d: linePath(pts) + `L${f.X(10)},${f.Y(0)}L${f.X(0)},${f.Y(0)}Z`, fill: 'rgba(5,150,105,0.35)', stroke: COL.meanHi, 'stroke-width': 2 }, f.g);
+      }
+      el('line', { x1: f.X(mo.mu), x2: f.X(mo.mu), y1: f.m.t, y2: f.m.t + f.ph, stroke: '#3b82f6', 'stroke-width': 1.5 }, f.g);
+      text(f.top, Math.min(f.X(mo.mu) + 4, f.W - 60), f.m.t + 10, `μ = ${f3(mo.mu)}`, { fill: '#93c5fd' });
+    });
+    tiles('tiles-dist', [
+      { label: 'Media μ', value: f3(mo.mu), ref: 'E[X]' },
+      { label: 'Varianza σ²', value: f3(mo.s2), ref: `σ = ${f3(mo.sd)}` },
+      { label: 'Asimmetria', value: nf(mo.skew, 3), ref: 'E[(X−μ)³]/σ³' },
+      { label: 'Curtosi κ', value: nf(mo.mu4 / (mo.s2 * mo.s2), 3), ref: `μ₄/σ⁴ · in eccesso ${nf(mo.exkurt, 2)}` },
+    ]);
+  }
+
+  /* ---- 05 · confronto ---- */
+  function renderCompare() {
+    const sim = st2.sim, mo = W.moments(sim.dist), m = sim.m;
+    const rows = sim.cps.map((n, ci) => {
+      const s = st2.stats[ci], th = W.theory(sim.dist, n);
+      const seM = th.sdMean / Math.sqrt(m), seV = th.sdS2 / Math.sqrt(m), seB = ((n - 1) / n) * seV;
+      return { n, s, th, seM, seV, seB, zM: (s.avgMean - mo.mu) / seM, zV: (s.avgVar - mo.s2) / seV, zB: (s.avgBiased - mo.s2) / seB, zB2: (s.avgBiased - th.biased) / seB };
+    });
+    let html = `<thead><tr><th class="!text-right">n</th><th class="!text-right">media delle x̄</th><th class="!text-right">μ</th><th class="!text-right">z</th>
+      <th class="!text-right">media delle s² (÷ n−1)</th><th class="!text-right">σ²</th><th class="!text-right">z</th>
+      <th class="!text-right">media di σ̂² (÷ n)</th><th class="!text-right">(n−1)σ²/n</th><th class="!text-right">z vs σ²</th></tr></thead><tbody>`;
+    for (const r of rows) {
+      html += `<tr><td class="num">${nf(r.n)}</td><td class="num text-white">${nf(r.s.avgMean, 4)}</td><td class="num text-gray-500">${nf(mo.mu, 4)}</td><td class="num ${zCls(r.zM)}">${nf(r.zM, 2)}</td>
+        <td class="num text-white">${nf(r.s.avgVar, 4)}</td><td class="num text-gray-500">${nf(mo.s2, 4)}</td><td class="num ${zCls(r.zV)}">${nf(r.zV, 2)}</td>
+        <td class="num text-white">${nf(r.s.avgBiased, 4)}</td><td class="num text-gray-500">${nf(r.th.biased, 4)}</td><td class="num ${zCls(r.zB)}">${nf(r.zB, 1)}</td></tr>`;
+    }
+    $('cmp-table').innerHTML = html + '</tbody>';
+    const nMax = sim.n;
+    draw('chart-avgmean', () => {
+      const devs = rows.map((r) => Math.abs(r.s.avgMean - mo.mu) + 2.2 * r.seM);
+      const R = Math.max(...devs) * 1.15;
+      const f = frame($('chart-avgmean'), {
+        height: 260, margin: { l: 56, r: 40, t: 14, b: 40 }, aria: 'Media delle medie campionarie in funzione di n',
+        x: { type: 'log', domain: [1.6, nMax * 1.4], ticks: logTicks(2, nMax), title: 'n = sistemi per hacker (scala log)' },
+        y: { type: 'lin', domain: [mo.mu - R, mo.mu + R], ticks: niceTicks(mo.mu - R, mo.mu + R, 4), fmt: (v) => nf(v, 3) },
+      });
+      el('line', { x1: f.m.l, x2: f.m.l + f.pw, y1: f.Y(mo.mu), y2: f.Y(mo.mu), stroke: CH.light, 'stroke-width': 1.5 }, f.g);
+      text(f.top, f.m.l + f.pw + 6, f.Y(mo.mu) + 3.5, 'μ', { fill: CH.strong, 'font-size': 11 });
+      for (const r of rows) {
+        const x = f.X(r.n);
+        errBar(f.g, x, f.Y(r.s.avgMean - 2 * r.seM), f.Y(r.s.avgMean + 2 * r.seM), COL.meanHi);
+        const d = dot(f.top, x, f.Y(r.s.avgMean), COL.mean);
+        const hit = el('circle', { cx: x, cy: f.Y(r.s.avgMean), r: 11, fill: 'transparent' }, f.top);
+        bindHit(hit, () => [[nf(r.s.avgMean, 5), 'media delle x̄'], [nf(mo.mu, 5), 'μ'], [`±${sig(2 * r.seM, 2)}`, '2 errori standard = 2σ/√(nm)'], [`z = ${nf(r.zM, 2)}`, `n = ${nf(r.n)}`]], () => d.setAttribute('r', 5.5), () => d.setAttribute('r', 4));
+      }
+    });
+    legend('legend-avgmean', [{ type: 'dot', color: COL.mean, label: 'media delle x̄ su m hacker (±2 e.s.)' }, { type: 'line', color: CH.light, label: 'μ teorica' }]);
+    draw('chart-avgvar', () => {
+      const vals = rows.flatMap((r) => [r.s.avgVar + 2 * r.seV, r.s.avgVar - 2 * r.seV, r.s.avgBiased - 2 * r.seB, r.th.biased]);
+      const y0 = Math.min(...vals) * 0.95, y1 = Math.max(...vals, mo.s2) * 1.04;
+      const f = frame($('chart-avgvar'), {
+        height: 260, margin: { l: 56, r: 74, t: 14, b: 40 }, aria: 'Media delle varianze campionarie in funzione di n',
+        x: { type: 'log', domain: [1.6, nMax * 1.4], ticks: logTicks(2, nMax), title: 'n = sistemi per hacker (scala log)' },
+        y: { type: 'lin', domain: [y0, y1], fmt: (v) => nf(v, 2) },
+      });
+      el('line', { x1: f.m.l, x2: f.m.l + f.pw, y1: f.Y(mo.s2), y2: f.Y(mo.s2), stroke: CH.light, 'stroke-width': 1.5 }, f.g);
+      const NS = []; for (let i = 0; i <= 120; i++) NS.push(2 * Math.pow(nMax / 2, i / 120));
+      el('path', { d: linePath(NS.map((n) => [f.X(n), f.Y(((n - 1) / n) * mo.s2)])), fill: 'none', stroke: '#64748b', 'stroke-width': 1.5 }, f.g);
+      spread([{ t: 'σ²', y: f.Y(mo.s2) + 3.5, col: CH.strong }, { t: '(n−1)σ²/n', y: f.Y(((nMax - 1) / nMax) * mo.s2) + 3.5, col: CH.label }], 12, f.m.t + 8, f.m.t + f.ph)
+        .forEach((l) => text(f.top, f.m.l + f.pw + 6, l.y, l.t, { fill: l.col, 'font-size': 10 }));
+      for (const r of rows) {
+        const x = f.X(r.n);
+        for (const [v, se, col, colHi, name, z] of [[r.s.avgVar, r.seV, COL.var, COL.varHi, 'media delle s² (÷ n−1)', r.zV], [r.s.avgBiased, r.seB, COL.alt, COL.altHi, 'media di σ̂² (÷ n)', r.zB]]) {
+          errBar(f.g, x, f.Y(v - 2 * se), f.Y(v + 2 * se), colHi);
+          const d = dot(f.top, x, f.Y(v), col);
+          const hit = el('circle', { cx: x, cy: f.Y(v), r: 10, fill: 'transparent' }, f.top);
+          bindHit(hit, () => [[nf(v, 4), name], [nf(mo.s2, 4), 'σ²'], [nf(r.th.biased, 4), '(n−1)σ²/n'], [`z vs σ² = ${nf(z, 2)}`, `n = ${nf(r.n)}`]], () => d.setAttribute('r', 5.5), () => d.setAttribute('r', 4));
+        }
+      }
+    });
+    legend('legend-avgvar', [{ type: 'dot', color: COL.var, label: 's² con divisore n − 1 (corretta)' }, { type: 'dot', color: COL.alt, label: 'σ̂² con divisore n (distorta)' }, { type: 'line', color: CH.light, label: 'σ²' }, { type: 'line', color: '#64748b', label: '(n − 1)σ²/n' }]);
+    const last = st2.stats[st2.stats.length - 1], N = sim.m * sim.n;
+    tiles('tiles-pooled', [
+      { label: `Media di tutti i ${sig(N, 2)} punteggi`, value: nf(last.pooledMean, 4), ref: `μ = ${nf(mo.mu, 4)} · fusione di Chan` },
+      { label: 'Varianza di tutti i punteggi', value: nf(last.pooledVar, 4), ref: `σ² = ${nf(mo.s2, 4)} · fusione di Chan` },
+      { label: 'Errore atteso della media globale', value: '±' + sig(2 * mo.sd / Math.sqrt(N), 2), ref: '2σ/√(mn)' },
+      { label: `Hacker con x̄ entro μ ± 2σ/√n (n = ${nf(sim.n)})`, value: pct(fracWithin(sim, sim.C - 1, mo.mu, 2 * mo.sd / Math.sqrt(sim.n)), 1), ref: 'atteso ≈ 95% (TLC)' },
+    ]);
+  }
+  function fracWithin(sim, ci, mu, h) { let c = 0; for (let j = 0; j < sim.m; j++) if (Math.abs(sim.MEAN[j * sim.C + ci] - mu) <= h) c++; return c / sim.m; }
+
+  /* ---- 06 · variabilità ---- */
+  const SM_COLS = { 100: [5, 10, 50, 100], 1000: [5, 20, 100, 1000] };
+  function renderVariability() {
+    const sim = st2.sim, mo = W.moments(sim.dist), nMax = sim.n;
+    const rows = sim.cps.map((n, ci) => ({ n, s: st2.stats[ci], th: W.theory(sim.dist, n) }));
+    draw('chart-sd', () => {
+      const all = rows.flatMap((r) => [r.s.sdMean, r.s.sdVar, r.th.sdMean, r.th.sdS2]).filter((v) => v > 0);
+      const f = frame($('chart-sd'), {
+        height: 300, margin: { l: 56, r: 64, t: 14, b: 40 }, aria: 'Deviazione standard delle stime in funzione di n',
+        x: { type: 'log', domain: [1.6, nMax * 1.4], ticks: logTicks(2, nMax), title: 'n = sistemi per hacker (scala log)' },
+        y: { type: 'log', domain: [Math.min(...all) / 1.6, Math.max(...all) * 1.6], fmt: fmtPow },
+      });
+      const NS = []; for (let i = 0; i <= 120; i++) NS.push(2 * Math.pow(nMax / 2, i / 120));
+      el('path', { d: linePath(NS.map((n) => [f.X(n), f.Y(W.theory(sim.dist, n).sdMean)])), fill: 'none', stroke: COL.mean, 'stroke-width': 2 }, f.g);
+      el('path', { d: linePath(NS.map((n) => [f.X(n), f.Y(W.theory(sim.dist, n).sdS2)])), fill: 'none', stroke: COL.var, 'stroke-width': 2 }, f.g);
+      spread([{ t: 'sd(s²)', y: f.Y(W.theory(sim.dist, nMax).sdS2) + 3.5 }, { t: 'sd(x̄)', y: f.Y(W.theory(sim.dist, nMax).sdMean) + 3.5 }], 12, f.m.t + 8, f.m.t + f.ph)
+        .forEach((l) => text(f.top, f.m.l + f.pw + 6, l.y, l.t, { fill: CH.strong, 'font-size': 10 }));
+      for (const r of rows) {
+        for (const [v, t, col, name] of [[r.s.sdMean, r.th.sdMean, COL.mean, 'sd delle x̄ tra hacker'], [r.s.sdVar, r.th.sdS2, COL.var, 'sd delle s² tra hacker']]) {
+          const x = f.X(r.n), y = f.Y(v), d = dot(f.top, x, y, col);
+          const hit = el('circle', { cx: x, cy: y, r: 10, fill: 'transparent' }, f.top);
+          bindHit(hit, () => [[nf(v, 4), name], [nf(t, 4), 'teoria'], [`n = ${nf(r.n)}`, '']], () => d.setAttribute('r', 5.5), () => d.setAttribute('r', 4));
+        }
+      }
+    });
+    legend('legend-sd', [{ type: 'dot', color: COL.mean, label: 'sd(x̄): punti simulati, linea σ/√n' }, { type: 'dot', color: COL.var, label: 'sd(s²): punti simulati, linea √Var(s²)' }]);
+    const fit = (key) => {
+      const pts = rows.filter((r) => r.n >= 10).map((r) => [Math.log10(r.n), Math.log10(key === 'm' ? r.s.sdMean : r.s.sdVar)]);
+      const mx = pts.reduce((a, p) => a + p[0], 0) / pts.length, my = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+      let sxy = 0, sxx = 0; for (const [x, y] of pts) { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; }
+      return sxy / sxx;
+    };
+    const nMu = Math.ceil(((1.96 * mo.sd) / 0.25) ** 2);
+    let nVar = 2; while (nVar < 1e7 && 1.96 * W.theory(sim.dist, nVar).sdS2 > 0.1 * mo.s2) nVar = Math.ceil(nVar * 1.02) + 1;
+    let lo = Math.max(2, Math.floor(nVar / 1.03) - 2); while (1.96 * W.theory(sim.dist, lo).sdS2 > 0.1 * mo.s2) lo++;
+    tiles('tiles-sd', [
+      { label: 'Pendenza di sd(x̄)', value: nf(fit('m'), 3), ref: 'teoria −0,5' },
+      { label: 'Pendenza di sd(s²)', value: nf(fit('v'), 3), ref: 'teoria → −0,5' },
+      { label: 'n per stimare μ a ±0,25 (95%)', value: nf(nMu), ref: '(1,96·σ/0,25)²' },
+      { label: 'n per stimare σ² a ±10% (95%)', value: nf(lo), ref: `curtosi κ = ${nf(mo.mu4 / mo.s2 ** 2, 2)}` },
+    ]);
+    // small multiples
+    const host = $('small-multiples'), cols = (SM_COLS[nMax] || []).filter((c) => sim.cps.includes(c));
+    host.innerHTML = '';
+    for (const q of ['mean', 'var']) {
+      const block = document.createElement('div');
+      block.innerHTML = `<div class="flex items-center gap-2 mb-2"><span class="inline-block w-3 h-3 rounded-sm" style="background:${q === 'mean' ? COL.mean : COL.var}"></span><span class="formula text-sm">${q === 'mean' ? 'x̄' : 's²'}</span><span class="text-xs text-gray-500">${q === 'mean' ? 'media campionaria di ciascun hacker' : 'varianza campionaria di ciascun hacker'}</span></div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">${cols.map((c) => `<div class="chart-host" id="sm-${q}-${c}"></div>`).join('')}</div>`;
+      host.appendChild(block);
+      const data = cols.map((n) => {
+        const ci = sim.cps.indexOf(n), th = W.theory(sim.dist, n), center = q === 'mean' ? mo.mu : mo.s2, sd = q === 'mean' ? th.sdMean : th.sdS2;
+        const arr = new Float64Array(sim.m); for (let j = 0; j < sim.m; j++) arr[j] = (q === 'mean' ? sim.MEAN : sim.VAR)[j * sim.C + ci];
+        const sorted = Float64Array.from(arr).sort();
+        let lo2 = Math.min(center - 4 * sd, sorted[Math.floor(sim.m * 0.002)]), hi2 = Math.max(center + 4 * sd, sorted[Math.ceil(sim.m * 0.998) - 1]);
+        if (q === 'var') lo2 = Math.max(0, lo2); else { lo2 = Math.max(0, lo2); hi2 = Math.min(10, hi2); }
+        return { n, arr, center, sd, lo: lo2, hi: hi2 };
+      });
+      const shared = [Math.min(...data.map((d) => d.lo)), Math.max(...data.map((d) => d.hi))];
+      cols.forEach((c, i) => draw(`sm-${q}-${c}`, () => drawSM(`sm-${q}-${c}`, q, data[i], shared)));
+    }
+  }
+  function drawSM(id, q, d, dom) {
+    const host = $(id), NB = 32, w = (d.hi - d.lo) / NB || 1, counts = new Float64Array(NB);
+    let out = 0;
+    for (const v of d.arr) { const b = Math.floor((v - d.lo) / w); if (b >= 0 && b < NB) counts[b]++; else if (v === d.hi) counts[NB - 1]++; else out++; }
+    const dens = Array.from(counts, (c) => c / d.arr.length / w);
+    const nd = (x) => Math.exp(-0.5 * ((x - d.center) / d.sd) ** 2) / (d.sd * Math.sqrt(2 * Math.PI));
+    const ymax = Math.max(...dens, nd(d.center)) * 1.1;
+    const narrow = (host.clientWidth || 300) < 250;
+    const f = frame(host, {
+      height: narrow ? 176 : 164, margin: { l: 10, r: 10, t: narrow ? 38 : 26, b: 30 }, aria: `${q} con n = ${d.n}`, xGrid: false,
+      x: { type: 'lin', domain: dom, ticks: ticks3(dom[0], dom[1]) }, y: { type: 'lin', domain: [0, ymax], ticks: [] },
+    });
+    text(f.svg, 10, 16, `n = ${nf(d.n)}`, { fill: '#e5e7eb', 'font-size': 11, 'font-weight': 600 });
+    let s = 0, s2 = 0; for (const v of d.arr) { s += v; s2 += v * v; }
+    const mean = s / d.arr.length, sd = Math.sqrt(Math.max(0, s2 / d.arr.length - mean * mean));
+    const lab = `media ${sig(mean, 3)} · sd ${sig(sd, 2)}`;
+    if (narrow) text(f.svg, 10, 30, lab, { fill: CH.tick, 'font-size': 9 }); else text(f.svg, f.W - 10, 16, lab, { 'text-anchor': 'end', fill: CH.tick, 'font-size': 9 });
+    const col = q === 'mean' ? COL.mean : COL.var, colHi = q === 'mean' ? COL.meanHi : COL.varHi;
+    for (let b = 0; b < NB; b++) {
+      if (!counts[b]) continue;
+      const x0 = f.X(d.lo + b * w), x1 = f.X(d.lo + (b + 1) * w), bw = Math.max(0.8, x1 - x0 - (x1 - x0 > 4 ? 1.2 : 0)), h = (f.ph * dens[b]) / ymax;
+      const bar = el('path', { d: barPath(x0, f.m.t + f.ph - h, bw, h, 2), fill: col }, f.g);
+      const hit = el('rect', { x: x0, y: f.m.t, width: Math.max(2, x1 - x0), height: f.ph, fill: 'transparent' }, f.top);
+      bindHit(hit, () => [[pct(counts[b] / d.arr.length, 2), 'degli hacker'], [`[${sig(d.lo + b * w, 3)}; ${sig(d.lo + (b + 1) * w, 3)})`, q === 'mean' ? 'x̄' : 's²']], () => bar.setAttribute('fill', colHi), () => bar.setAttribute('fill', col));
+    }
+    const pts = []; for (let i = 0; i <= 160; i++) { const x = d.lo + (i / 160) * (d.hi - d.lo); pts.push([f.X(x), f.Y(nd(x))]); }
+    el('path', { d: linePath(pts), fill: 'none', stroke: CH.strong, 'stroke-width': 1.5, 'pointer-events': 'none' }, f.g);
+  }
+
+  /* ---- 07 · copertura degli intervalli ---- */
+  function renderCoverage() {
+    const sim = st2.sim, mo = W.moments(sim.dist), nMax = sim.n;
+    const rows = sim.cps.map((n, ci) => ({ n, c: W.coverage(sim, ci, mo.mu, W.T975[n - 1]) }));
+    const band = 2 * Math.sqrt((0.95 * 0.05) / sim.m);
+    const y0 = Math.min(0.85, ...rows.map((r) => r.c - 0.02));
+    draw('chart-cov', () => {
+      const f = frame($('chart-cov'), {
+        height: 260, margin: { l: 52, r: 50, t: 14, b: 40 }, aria: 'Copertura dell\'intervallo di confidenza in funzione di n',
+        x: { type: 'log', domain: [1.6, nMax * 1.4], ticks: logTicks(2, nMax), title: 'n = sistemi per hacker (scala log)' },
+        y: { type: 'lin', domain: [y0, 1], fmt: (v) => pct(v, 0) },
+      });
+      el('rect', { x: f.m.l, y: f.Y(0.95 + band), width: f.pw, height: f.Y(0.95 - band) - f.Y(0.95 + band), fill: CH.band }, f.g);
+      el('line', { x1: f.m.l, x2: f.m.l + f.pw, y1: f.Y(0.95), y2: f.Y(0.95), stroke: CH.light, 'stroke-width': 1.5 }, f.g);
+      text(f.top, f.m.l + f.pw + 6, f.Y(0.95) + 3.5, '95%', { fill: CH.strong, 'font-size': 10 });
+      el('path', { d: linePath(rows.map((r) => [f.X(r.n), f.Y(r.c)])), fill: 'none', stroke: COL.mean, 'stroke-width': 1.5, 'stroke-opacity': 0.6 }, f.g);
+      for (const r of rows) {
+        const x = f.X(r.n), y = f.Y(r.c), d = dot(f.top, x, y, COL.mean);
+        const hit = el('circle', { cx: x, cy: y, r: 11, fill: 'transparent' }, f.top);
+        bindHit(hit, () => [[pct(r.c, 2), 'degli hacker con μ nell\'intervallo'], [`t = ${nf(W.T975[r.n - 1], 3)}`, `gradi di libertà ${r.n - 1}`], [`n = ${nf(r.n)}`, '']], () => d.setAttribute('r', 5.5), () => d.setAttribute('r', 4));
+      }
+    });
+    legend('legend-cov', [{ type: 'dot', color: COL.mean, label: `copertura simulata (${nf(sim.m)} hacker)` }, { type: 'line', color: CH.light, label: 'livello nominale 95%' }, { type: 'band', color: CH.band, label: `rumore Monte Carlo ±${pct(band, 1)}` }]);
+    const worst = rows.reduce((a, r) => (r.c < a.c ? r : a), rows[0]);
+    const okFrom = rows.find((r, i) => rows.slice(i).every((q) => Math.abs(q.c - 0.95) <= band + 0.005));
+    $('cov-note').innerHTML = `Con <strong class="text-white">${esc(W.DISTS[sim.dist].label)}</strong> la copertura minima è ${pct(worst.c, 1)} (n = ${worst.n})${okFrom ? `; da n = ${nf(okFrom.n)} in poi resta entro il rumore Monte Carlo attorno al 95%` : ''}. L'intervallo funziona perché x̄ è corretto e s² stima σ² senza distorsione; l'approssimazione t presuppone però una distribuzione di x̄ vicina alla normale, ed è per questo che con n piccolo e dati asimmetrici la copertura scende.`;
+  }
+
+  function renderTrajNote() {
+    const sim = st2.sim, mo = W.moments(sim.dist);
+    $('traj-note').innerHTML = `Ogni linea è un hacker (${sim.nPaths} su ${nf(sim.m)}): sopra la media corrente Mₖ, sotto la varianza corrente s²ₖ, entrambe aggiornate con le 3 righe di Welford. Le bande blu sono ±2 deviazioni standard teoriche, 2σ/√k e 2·√Var(s²ₖ): si stringono a imbuto attorno a μ = ${f3(mo.mu)} e σ² = ${f3(mo.s2)}. La linea più chiara segue lo stesso hacker nei due pannelli.`;
+  }
+  function renderAll2() {
+    renderTrajNote();
+    renderCompare();
+    renderVariability();
+    renderCoverage();
+  }
+
+  /* ===================================================================== *
+   *  08 · Self-test
+   * ===================================================================== */
+  function selfTests() {
+    const out = [];
+    const T = (name, fn) => { try { const r = fn(); out.push([name, r === true, r === true ? '' : String(r)]); } catch (e) { out.push([name, false, e.message]); } };
+    const rel = (a, b) => Math.abs(a - b) / Math.abs(b);
+    T('xoshiro128**: 12 uscite identiche all\'implementazione C di riferimento', () => { const s = new Uint32Array([0x01234567, 0x89abcdef, 0xdeadbeef, 0x0badf00d]); return REF.xoshiro.every((v) => W.xoshiroNext(s) === v); });
+    REF.welford_data.forEach((d, i) => T(`Welford = numpy.var(ddof=1) su ${d.length} valori`, () => { const a = W.newAcc(); d.forEach((x) => W.update(a, x)); return (rel(W.variance(a), REF.welford_var[i]) < 1e-12 && rel(a.mean, REF.welford_mean[i]) < 1e-13) || W.variance(a); }));
+    T('Le due forme di Sₖ coincidono: δ(x − Mₖ) = ((k−1)/k)·δ²', () => { const d = REF.welford_data[3]; let m = 0, a = 0, b = 0; d.forEach((x, i) => { const k = i + 1, dd = x - m; m += dd / k; a += dd * (x - m); b += ((k - 1) / k) * dd * dd; }); return rel(a, b) < 1e-12 || `${a} vs ${b}`; });
+    T('Ricorrenza diretta di s²ₖ = Welford', () => { const d = REF.welford_data[3]; let m = 0, v = 0; d.forEach((x, i) => { const k = i + 1, dd = x - m; m += dd / k; if (k >= 2) v += dd * dd / k - v / (k - 1); }); return rel(v, REF.welford_var[3]) < 1e-11 || v; });
+    T('Fusione di Chan di due metà = Welford sull\'insieme completo', () => { const d = REF.welford_data[3], A = W.newAcc(), B = W.newAcc(); d.slice(0, 400).forEach((x) => W.update(A, x)); d.slice(400).forEach((x) => W.update(B, x)); const M = W.merge(A, B); return rel(W.variance(M), REF.welford_var[3]) < 1e-12 || W.variance(M); });
+    T('Varianza esatta (BigInt) di 10⁹ + {4, 7, 13, 16} = 30', () => W.exactVarianceInt([4, 7, 13, 16].map((x) => x + 1e9)) === 30);
+    T('Welford in float64 con spostamento 10¹⁵: 30 esatto', () => W.welford([4, 7, 13, 16].map((x) => x + 1e15)) === 30 || W.welford([4, 7, 13, 16].map((x) => x + 1e15)));
+    T('Formula da manuale in float64 con spostamento 10⁹: errata (atteso)', () => Math.abs(W.naive([4, 7, 13, 16].map((x) => x + 1e9)) - 30) > 1);
+    for (const key of Object.keys(W.DISTS)) {
+      T(`Momenti di ${W.DISTS[key].label} = scipy (μ, σ², μ₄)`, () => { const mo = W.moments(key), r = REF.moments[key]; return (rel(mo.mu, r.mu) < 1e-12 && rel(mo.s2, r.s2) < 1e-12 && rel(mo.mu4, r.mu4) < 1e-9) || JSON.stringify(mo); });
+      for (const n of [5, 20]) T(`Var(s²) ${W.DISTS[key].short}, n = ${n}: formula vs simulazione numpy (400.000 campioni)`, () => { const t = W.theory(key, n).varS2, mc = REF.mc[`${key}_${n}`].var_s2; return rel(t, mc) < 0.03 || `${t} vs ${mc}`; });
+    }
+    T('Quantili t₀,₉₇₅ = scipy.stats.t.ppf', () => Object.entries(REF.t975).every(([df, v]) => Math.abs(W.T975[df] - v) < 1e-12));
+    const sim = st2.sim;
+    if (sim) {
+      T(`Simulazione corrente: media delle x̄ entro 4,5 e.s. da μ a tutti gli n`, () => { const mo = W.moments(sim.dist); const bad = sim.cps.filter((n, ci) => Math.abs(st2.stats[ci].avgMean - mo.mu) > (4.5 * W.theory(sim.dist, n).sdMean) / Math.sqrt(sim.m)); return !bad.length || `n = ${bad.join(', ')}`; });
+      T(`Simulazione corrente: media delle s² entro 4,5 e.s. da σ² a tutti gli n`, () => { const mo = W.moments(sim.dist); const bad = sim.cps.filter((n, ci) => Math.abs(st2.stats[ci].avgVar - mo.s2) > (4.5 * W.theory(sim.dist, n).sdS2) / Math.sqrt(sim.m)); return !bad.length || `n = ${bad.join(', ')}`; });
+      T('Simulazione corrente: σ̂² (÷ n) compatibile con (n − 1)σ²/n', () => { const bad = sim.cps.filter((n, ci) => { const th = W.theory(sim.dist, n); return Math.abs(st2.stats[ci].avgBiased - th.biased) > (4.5 * ((n - 1) / n) * th.sdS2) / Math.sqrt(sim.m); }); return !bad.length || `n = ${bad.join(', ')}`; });
+    }
+    return out;
+  }
+  async function runSelfTestUI() {
+    const log = $('selftest-log');
+    log.innerHTML = '';
+    addLog(log, 'Avvio self-test…');
+    await yieldUI();
+    const t0 = performance.now(), res = selfTests();
+    for (const [name, ok, detail] of res) addLog(log, `${ok ? '<span class="ok">✓</span>' : '<span class="ko">✗</span>'} ${esc(name)}${detail ? ' <span class="text-gray-500">— ' + esc(detail) + '</span>' : ''}`);
+    const passed = res.filter((r) => r[1]).length;
+    addLog(log, `=== ${passed}/${res.length} test superati in ${nf(performance.now() - t0, 0)} ms ===`, passed === res.length ? 'neon-text-green' : 'text-red-400');
+    $('selftest-summary').innerHTML = passed === res.length ? `<span class="ok">✓ ${passed}/${res.length} test superati</span>` : `<span class="ko">✗ ${res.length - passed} test falliti su ${res.length}</span>`;
+  }
+
+  /* ===================================================================== *
+   *  Avvio
+   * ===================================================================== */
+  function fixStickyTop() { const col = $('left-col'); if (col) col.style.top = Math.min(64, innerHeight - col.offsetHeight - 16) + 'px'; }
+  function bind() {
+    // Es. 1
+    $('btn-run-1').addEventListener('click', () => runTrace(true));
+    $('btn-instant-1').addEventListener('click', () => runTrace(false));
+    $('btn-random-1').addEventListener('click', () => {
+      const r = W.makeRng(crypto.getRandomValues(new Uint32Array(1))[0], 5), key = DK();
+      const xs = []; for (let i = 0; i < 10; i++) { const v = W.DISTS[key].sample(r); xs.push(W.DISTS[key].kind === 'continua' ? Math.round(v * 10) / 10 : v); }
+      $('data-1').value = xs.map((x) => String(x)).join(', ');
+      runTrace(false);
+    });
+    $('data-1').addEventListener('input', debounce(() => { if (parseData()) runTrace(false); }, 400));
+    $('offset').addEventListener('input', renderStab);
+    document.querySelectorAll('#stab-seg button').forEach((b) => b.addEventListener('click', () => { stab.set = b.dataset.set; renderStab(); }));
+    document.querySelectorAll('#prec-seg button').forEach((b) => b.addEventListener('click', () => { stab.prec = b.dataset.prec; renderStab(); }));
+    // Es. 2
+    const sel = $('dist');
+    sel.innerHTML = Object.entries(W.DISTS).map(([k, d]) => `<option value="${k}">${esc(d.label)}</option>`).join('');
+    const rerun = debounce(() => runSim(false), 300);
+    sel.addEventListener('change', () => { renderDist(); rerun(); });
+    $('n').addEventListener('change', rerun);
+    $('m').addEventListener('change', rerun);
+    $('seed').addEventListener('change', rerun);
+    $('btn-seed').addEventListener('click', () => { $('seed').value = crypto.getRandomValues(new Uint32Array(1))[0]; runSim(false); });
+    $('btn-start').addEventListener('click', () => runSim(true));
+    $('btn-instant').addEventListener('click', () => runSim(false));
+    $('logx').addEventListener('change', () => { st2.logx = $('logx').checked; if (st2.sim) drawTraj(st2.sim.P); });
+    $('btn-selftest').addEventListener('click', runSelfTestUI);
+    const cv = $('traj-canvas');
+    cv.addEventListener('pointermove', trajHover);
+    cv.addEventListener('pointerleave', () => { blitTraj(null); tipHide(); });
+    if ('ResizeObserver' in window) {
+      let lw = $('traj-wrap').clientWidth;
+      new ResizeObserver(() => { const w = $('traj-wrap').clientWidth; if (Math.abs(w - lw) > 2 && st2.sim) { lw = w; drawTraj(st2.sim.P); } }).observe($('traj-wrap'));
+      new ResizeObserver(fixStickyTop).observe($('left-col'));
+    }
+    window.addEventListener('resize', debounce(fixStickyTop, 100));
+  }
+  async function init() {
+    bind();
+    renderDist();
+    renderStab();
+    await runTrace(false);
+    await runSim(false);
+    await runSelfTestUI();
+  }
+  if (document.readyState === 'complete') init();
+  else window.addEventListener('load', init);
+})();
+</script>
+</body>
+</html>
